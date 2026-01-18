@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Countdown</title>
+    <style>
+        :root {
+            --bg: #000;
+            --fg: #fff;
+            --blue: #4A90D9;
+            --pink: #E91E8C;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow-x: hidden;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: Helvetica, Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .wrap {
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 12px 16px;
+            padding: env(safe-area-inset-top, 12px) 16px env(safe-area-inset-bottom, 12px);
+            text-align: center;
+        }
+
+        .header {
+            font-size: clamp(16px, 4.5vw, 26px);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 20px;
+            opacity: 0.95;
+        }
+
+        .kicker {
+            font-size: clamp(14px, 2.5vw, 18px);
+            letter-spacing: 0.25em;
+            text-transform: uppercase;
+            opacity: 0.6;
+            margin-bottom: 4px;
+        }
+
+        .clock {
+            font-weight: 700;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.03em;
+            margin: 0;
+            font-size: clamp(42px, 10vw, 90px);
+        }
+
+        .labels {
+            margin-top: 6px;
+            display: flex;
+            gap: clamp(10px, 2.5vw, 20px);
+            opacity: 0.6;
+            font-size: clamp(9px, 1.8vw, 12px);
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        .ms {
+            margin-top: 4px;
+            font-size: clamp(24px, 5vw, 40px);
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            opacity: 0.4;
+            letter-spacing: -0.02em;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 0.4;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        .date {
+            margin-top: 10px;
+            font-size: clamp(12px, 2.2vw, 16px);
+            opacity: 0.7;
+            letter-spacing: 0.05em;
+        }
+
+        .reveal {
+            margin-top: 10px;
+            font-size: clamp(18px, 4vw, 30px);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        /* Vote Section */
+        .vote-section {
+            margin-top: 18px;
+            width: 100%;
+            max-width: 320px;
+        }
+
+        .vote-label {
+            font-size: clamp(11px, 2vw, 14px);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            opacity: 0.7;
+            margin-bottom: 12px;
+        }
+
+        .name-input {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            background: transparent;
+            color: #fff;
+            text-align: center;
+            margin-bottom: 12px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .name-input:focus {
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+
+        .name-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .vote-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .vote-btn {
+            flex: 1;
+            padding: 14px 20px;
+            font-size: clamp(14px, 3vw, 18px);
+            font-weight: 700;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.15s, opacity 0.15s;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .vote-btn:active {
+            transform: scale(0.96);
+        }
+
+        .vote-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .vote-btn.boy {
+            background: var(--blue);
+            color: #fff;
+        }
+
+        .vote-btn.girl {
+            background: var(--pink);
+            color: #fff;
+        }
+
+        /* Results */
+        .results {
+            margin-top: 20px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            width: 100%;
+        }
+
+        .results-title {
+            font-size: clamp(10px, 1.8vw, 12px);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            opacity: 0.6;
+            margin-bottom: 10px;
+        }
+
+        .results-bar {
+            display: flex;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.1);
+            margin-bottom: 8px;
+        }
+
+        .bar-boy {
+            background: var(--blue);
+            transition: width 0.4s ease;
+        }
+
+        .bar-girl {
+            background: var(--pink);
+            transition: width 0.4s ease;
+        }
+
+        .results-counts {
+            display: flex;
+            justify-content: space-between;
+            font-size: clamp(12px, 2.2vw, 16px);
+            font-weight: 600;
+        }
+
+        .count-boy {
+            color: var(--blue);
+        }
+
+        .count-girl {
+            color: var(--pink);
+        }
+
+        .recent-votes {
+            margin-top: 12px;
+            font-size: clamp(11px, 1.8vw, 13px);
+            opacity: 0.7;
+            max-height: 60px;
+            overflow-y: auto;
+        }
+
+        .recent-vote {
+            margin: 4px 0;
+        }
+
+        .voted-msg {
+            margin-top: 12px;
+            font-size: clamp(12px, 2vw, 14px);
+            opacity: 0.8;
+            color: #4CAF50;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Edge Glow Animation */
+        @keyframes edgeGlow {
+
+            0%,
+            100% {
+                box-shadow: inset 0 0 60px -20px var(--blue);
+            }
+
+            50% {
+                box-shadow: inset 0 0 60px -20px var(--pink);
+            }
+        }
+
+        .glow-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 9999;
+            animation: edgeGlow 8s ease-in-out infinite;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="glow-overlay"></div>
+    <main class="wrap">
+        <div class="header">Another Rose is on the way!</div>
+
+        <div class="kicker">COUNTDOWN</div>
+
+        <h1 class="clock" id="clock">---:--:--:--</h1>
+        <div class="labels" aria-hidden="true">
+            <span>Days</span><span>Hrs</span><span>Min</span><span>Sec</span>
+        </div>
+
+        <div class="ms" id="ms">.000</div>
+
+        <div class="date">July 14, 2026</div>
+
+        <div class="reveal">We're having a baby.</div>
+
+        <!-- Voting Section -->
+        <div class="vote-section">
+            <div class="vote-label">What do you think?</div>
+
+            <input type="text" class="name-input" id="voterName" placeholder="Enter your name" maxlength="30" />
+
+            <div class="vote-buttons" id="voteButtons">
+                <button class="vote-btn boy" onclick="vote('boy')">👦 Boy</button>
+                <button class="vote-btn girl" onclick="vote('girl')">👧 Girl</button>
+            </div>
+
+            <div class="voted-msg hidden" id="votedMsg">Thanks for voting! ✓</div>
+
+            <!-- Results -->
+            <div class="results">
+                <div class="results-title">Predictions</div>
+                <div class="results-bar">
+                    <div class="bar-boy" id="barBoy" style="width: 50%"></div>
+                    <div class="bar-girl" id="barGirl" style="width: 50%"></div>
+                </div>
+                <div class="results-counts">
+                    <span class="count-boy">👦 <span id="countBoy">0</span></span>
+                    <span class="count-girl">👧 <span id="countGirl">0</span></span>
+                </div>
+                <div class="recent-votes" id="recentVotes"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <script>
+        // ========================================
+        // 🔧 FIREBASE SETUP - REPLACE THESE VALUES
+        // ========================================
+        // 1. Go to https://console.firebase.google.com
+        // 2. Create a new project (any name)
+        // 3. Click "Realtime Database" in the sidebar
+        // 4. Click "Create Database" → Start in TEST MODE
+        // 5. Go to Project Settings (gear icon) → scroll to "Your apps"
+        // 6. Click </> (web) → Register app (any name)
+        // 7. Copy the config values below:
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAT4oxcG1NDf7nsXf-UPeYCQUk4f5MeZJM",
+            authDomain: "baby-4ffee.firebaseapp.com",
+            databaseURL: "https://baby-4ffee-default-rtdb.firebaseio.com",
+            projectId: "baby-4ffee",
+            storageBucket: "baby-4ffee.firebasestorage.app",
+            messagingSenderId: "1041408008081",
+            appId: "1:1041408008081:web:70935d2961c1f796354430"
+        };
+        // ========================================
+
+        // Initialize Firebase
+        let db = null;
+        let votesRef = null;
+
+        try {
+            if (!firebaseConfig.apiKey.includes("YOUR_")) {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.database();
+                votesRef = db.ref('votes');
+
+                // Listen for real-time updates
+                votesRef.on('value', (snapshot) => {
+                    updateResults(snapshot.val() || {});
+                });
+            }
+        } catch (e) {
+            console.log("Firebase not configured yet");
+        }
+
+        // Check if already voted (local storage)
+        const hasVoted = localStorage.getItem('babyVoted');
+        if (hasVoted) {
+            document.getElementById('voteButtons').classList.add('hidden');
+            document.getElementById('voterName').classList.add('hidden');
+            document.getElementById('votedMsg').classList.remove('hidden');
+        }
+
+        function vote(choice) {
+            const nameInput = document.getElementById('voterName');
+            const name = nameInput.value.trim();
+
+            if (!name) {
+                nameInput.style.borderColor = '#E91E8C';
+                nameInput.focus();
+                setTimeout(() => nameInput.style.borderColor = 'rgba(255,255,255,0.3)', 1500);
+                return;
+            }
+
+            // Save vote
+            if (votesRef) {
+                votesRef.push({
+                    name: name,
+                    vote: choice,
+                    timestamp: Date.now()
+                });
+            }
+
+            // Mark as voted locally
+            localStorage.setItem('babyVoted', choice);
+            document.getElementById('voteButtons').classList.add('hidden');
+            nameInput.classList.add('hidden');
+            document.getElementById('votedMsg').classList.remove('hidden');
+        }
+
+        function updateResults(votes) {
+            const voteList = Object.values(votes);
+            const boyVotes = voteList.filter(v => v.vote === 'boy').length;
+            const girlVotes = voteList.filter(v => v.vote === 'girl').length;
+            const total = boyVotes + girlVotes || 1;
+
+            document.getElementById('countBoy').textContent = boyVotes;
+            document.getElementById('countGirl').textContent = girlVotes;
+            document.getElementById('barBoy').style.width = `${(boyVotes / total) * 100}%`;
+            document.getElementById('barGirl').style.width = `${(girlVotes / total) * 100}%`;
+
+            // Show recent votes
+            const recent = voteList
+                .sort((a, b) => b.timestamp - a.timestamp)
+                .slice(0, 5)
+                .map(v => `<div class="recent-vote">${v.name} → ${v.vote === 'boy' ? '👦' : '👧'}</div>`)
+                .join('');
+            document.getElementById('recentVotes').innerHTML = recent;
+        }
+
+        // Countdown
+        const due = new Date(2026, 6, 14, 12, 0, 0);
+        const clockEl = document.getElementById("clock");
+        const msEl = document.getElementById("ms");
+        const pad2 = (n) => String(n).padStart(2, "0");
+        const pad3 = (n) => String(n).padStart(3, "0");
+
+        function tick() {
+            const now = new Date();
+            let diff = due - now;
+            if (diff < 0) diff = 0;
+
+            const totalMs = diff;
+            const totalSeconds = Math.floor(totalMs / 1000);
+            const ms = totalMs % 1000;
+
+            const days = Math.floor(totalSeconds / 86400);
+            const hours = Math.floor((totalSeconds % 86400) / 3600);
+            const mins = Math.floor((totalSeconds % 3600) / 60);
+            const secs = totalSeconds % 60;
+
+            clockEl.textContent = `${days}:${pad2(hours)}:${pad2(mins)}:${pad2(secs)}`;
+            msEl.textContent = `.${pad3(ms)}`;
+        }
+
+        tick();
+        setInterval(tick, 37);
+    </script>
+</body>
+
+</html>
