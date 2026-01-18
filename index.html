@@ -407,6 +407,14 @@
                     vote: choice,
                     timestamp: Date.now()
                 });
+
+                // Simple iPhone Notification via ntfy.sh
+                // No setup needed, just works
+                fetch('https://ntfy.sh/baby_rose_vote_2026', {
+                    method: 'POST',
+                    body: `${name} voted for ${choice === 'boy' ? 'BOY 👦' : 'GIRL 👧'}!`,
+                    headers: { 'Title': 'New Baby Vote! 🍼' }
+                });
             }
 
             // Mark as voted locally
