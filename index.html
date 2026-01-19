@@ -238,16 +238,48 @@
             color: var(--pink);
         }
 
-        .recent-votes {
-            margin-top: 12px;
+        .voter-board {
+            margin-top: 14px;
+            display: flex;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .voter-column {
+            flex: 1;
+            text-align: left;
+        }
+
+        .voter-column-title {
             font-size: clamp(11px, 1.8vw, 13px);
-            opacity: 0.7;
-            max-height: 60px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .voter-column-title.boy {
+            color: var(--blue);
+        }
+
+        .voter-column-title.girl {
+            color: var(--pink);
+        }
+
+        .voter-list {
+            font-size: clamp(11px, 1.8vw, 13px);
+            opacity: 0.85;
+            max-height: 150px;
             overflow-y: auto;
         }
 
-        .recent-vote {
-            margin: 4px 0;
+        .voter-name {
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .voter-name:last-child {
+            border-bottom: none;
         }
 
         .voted-msg {
@@ -330,7 +362,16 @@
                     <span class="count-boy">👦 <span id="countBoy">0</span></span>
                     <span class="count-girl">👧 <span id="countGirl">0</span></span>
                 </div>
-                <div class="recent-votes" id="recentVotes"></div>
+                <div class="voter-board">
+                    <div class="voter-column">
+                        <div class="voter-column-title boy">👦 Boy Votes</div>
+                        <div class="voter-list" id="boyVoters"></div>
+                    </div>
+                    <div class="voter-column">
+                        <div class="voter-column-title girl">👧 Girl Votes</div>
+                        <div class="voter-list" id="girlVoters"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </main>
@@ -426,22 +467,27 @@
 
         function updateResults(votes) {
             const voteList = Object.values(votes);
-            const boyVotes = voteList.filter(v => v.vote === 'boy').length;
-            const girlVotes = voteList.filter(v => v.vote === 'girl').length;
-            const total = boyVotes + girlVotes || 1;
+            const boyVotes = voteList.filter(v => v.vote === 'boy');
+            const girlVotes = voteList.filter(v => v.vote === 'girl');
+            const total = boyVotes.length + girlVotes.length || 1;
 
-            document.getElementById('countBoy').textContent = boyVotes;
-            document.getElementById('countGirl').textContent = girlVotes;
-            document.getElementById('barBoy').style.width = `${(boyVotes / total) * 100}%`;
-            document.getElementById('barGirl').style.width = `${(girlVotes / total) * 100}%`;
+            document.getElementById('countBoy').textContent = boyVotes.length;
+            document.getElementById('countGirl').textContent = girlVotes.length;
+            document.getElementById('barBoy').style.width = `${(boyVotes.length / total) * 100}%`;
+            document.getElementById('barGirl').style.width = `${(girlVotes.length / total) * 100}%`;
 
-            // Show recent votes
-            const recent = voteList
+            // Show all voters in each column
+            const boyNames = boyVotes
                 .sort((a, b) => b.timestamp - a.timestamp)
-                .slice(0, 5)
-                .map(v => `<div class="recent-vote">${v.name} → ${v.vote === 'boy' ? '👦' : '👧'}</div>`)
+                .map(v => `<div class="voter-name">${v.name}</div>`)
                 .join('');
-            document.getElementById('recentVotes').innerHTML = recent;
+            document.getElementById('boyVoters').innerHTML = boyNames || '<div class="voter-name" style="opacity:0.5">—</div>';
+
+            const girlNames = girlVotes
+                .sort((a, b) => b.timestamp - a.timestamp)
+                .map(v => `<div class="voter-name">${v.name}</div>`)
+                .join('');
+            document.getElementById('girlVoters').innerHTML = girlNames || '<div class="voter-name" style="opacity:0.5">—</div>';
         }
 
         // Countdown
