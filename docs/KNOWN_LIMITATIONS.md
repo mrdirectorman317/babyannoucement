@@ -2,6 +2,9 @@
 
 > Updated after the integration pass. What changed: the Mac host **now compiles with a real Apple SDK in CI** and the Unity runtime **type-checks** (it did not before - see `docs/ORIGINAL_HANDOFF_CORRECTIONS.md`). Everything below about hardware, Unity runtime behavior, and permissions still stands.
 
+## Video pipeline (added later; all unverified on hardware)
+See `docs/VIDEO_PIPELINE.md` "Known gaps". In short: one CPU copy per decoded frame, 4:2:0 chroma, fixed per-stream resolution, YUV shader orientation/range unverified on a device, no measured latency, JPEG is still the fallback and the Editor path. The 1.8 KB `libspatialmacnative.so` is a committed binary (reproducible from `quest/native/`).
+
 ## Added with the integrations / glass UI (all unverified on hardware)
 
 - Glass/veil shaders, text sizing (`GlassUI.NewText` estimate), hit targets and layout have never run in Unity or on a Quest.

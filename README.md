@@ -7,6 +7,7 @@ A spatial-computing workspace for a Meta Quest 3S that shows **your real Mac's**
 
 **Start here:** [`docs/WHEN_YOU_GET_BACK.md`](docs/WHEN_YOU_GET_BACK.md) (shortest path to running it) ·
 [`docs/EXPERIENCE.md`](docs/EXPERIENCE.md) (the Vision Pro feel) ·
+[`docs/VIDEO_PIPELINE.md`](docs/VIDEO_PIPELINE.md) (how it gets to 60 fps) ·
 [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md) (Siri, Messages, ChatGPT, voice) ·
 [`docs/ORIGINAL_HANDOFF_CORRECTIONS.md`](docs/ORIGINAL_HANDOFF_CORRECTIONS.md) (bugs found in the first draft).
 
@@ -22,6 +23,7 @@ The previous contents of this repository (the baby announcement site) are preser
 | Siri & Shortcuts | App Intents: open workspace, real room/virtual, recenter, note, ask, emergency stop | Compiles in an Xcode build; Siri not tried |
 | Voice | Push-to-talk -> local whisper.cpp or (opt-in) OpenAI speech-to-text | Compiles; not tried |
 | Environment | Passthrough/virtual switch (Meta layer adapter), dimmer, recenter "crown", palm-up menu | Type-checks (hands/Meta code is symbol-gated) |
+| Video | Hardware H.264/HEVC (VideoToolbox -> MediaCodec), 60 fps target, adaptive bitrate, keyframe recovery, local cursor, live Stats | Encoder/decoder pieces tested in CI; **never run on a headset** - see [`docs/VIDEO_PIPELINE.md`](docs/VIDEO_PIPELINE.md) |
 | Transport/security | Pinned-TLS, 3 lanes, token, generation-guarded input | Python<->Python tested; Swift compiles |
 
 CI (`.github/workflows/ci.yml`): Linux (Python tests, both smoke tests, Unity type-check) and macOS (real Xcode: `swift build`, `swift test`, full Xcode app build).
