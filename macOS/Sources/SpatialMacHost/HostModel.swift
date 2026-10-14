@@ -2,12 +2,32 @@ import AppKit
 import Combine
 import SpatialCore
 
-@MainActor final class HostModel:ObservableObject {
+struct RecentNotification { let id:String,sender:String,body:String,chatGUID:String? }
+
+@MainActor final class HostModel:ObservableObject,AssistantToolHost {
+    static let shared=HostModel()
     @Published var sources=[SourceDTO]()
     @Published var approved=Set<String>()
     @Published private(set) var running=false,sharingEnabled=false,controlEnabled=false,speechEnabled=false
     @Published private(set) var status="Stopped. Run scripts/setup-mac.sh before starting."
     @Published private(set) var connected=false
+    // Integrations. Everything here is opt-in; reply/consequential powers reset when the headset disconnects.
+    @Published private(set) var messagesEnabled=UserDefaults.standard.bool(forKey:"messagesEnabled")
+    @Published private(set) var messagePreview=UserDefaults.standard.object(forKey:"messagePreview") as? Bool ?? true
+    @Published private(set) var contactLookup=UserDefaults.standard.bool(forKey:"contactLookup")
+    @Published private(set) var assistantReadsMessages=UserDefaults.standard.bool(forKey:"assistantReadsMessages")
+    @Published private(set) var replyEnabled=false
+    @Published private(set) var messagesStatus="Off."
+    @Published private(set) var assistantHasKey=false
+    @Published private(set) var assistantBusy=false
+    @Published private(set) var lastAssistantReply=""
+    @Published var assistantModel=UserDefaults.standard.string(forKey:"assistantModel") ?? "gpt-5" {
+        didSet{UserDefaults.standard.set(assistantModel.trimmingCharacters(in:.whitespaces),forKey:"assistantModel")}
+    }
+    private let watcher=MessageWatcher(),assistant=AssistantService()
+    private var recent=[RecentNotification]()
+    private var confirmations=ConfirmationBook()
+    private var lastReplyAt=Date.distantPast
     private let host=SecureHost(),capture=CaptureService(),input=InputRouter()
     private var settings:HostSettings?
     private var peers=[String:SecurePeer]()
@@ -16,6 +36,7 @@ import SpatialCore
     private var lastHeartbeat=Date()
     private var timer:Timer?
     init() {
+        assistantHasKey=assistant.hasKey
         host.onPacket={ [weak self] peer,packet in Task{@MainActor in self?.receive(peer,packet)} }
         host.onClose={ [weak self] peer in Task{@MainActor in self?.closed(peer)} }
         timer=Timer.scheduledTimer(withTimeInterval:0.5,repeats:true){ [weak self] _ in
@@ -33,10 +54,11 @@ import SpatialCore
             let s=try HostSettings.load();settings=s;try host.start(settings:s);running=true
             status=s.bindLAN ? "TLS listening on LAN. Explicit sharing/input approval still required.":"TLS listening on 127.0.0.1. Use adb reverse."
             Task{await refresh()}
+            if messagesEnabled{startWatcher()}
         } catch{status=error.localizedDescription}
     }
     func stop() {
-        setSharing(false);setControl(false);host.stop();running=false;connected=false
+        setSharing(false);setControl(false);setReply(false);watcher.stop();confirmations.clear();host.stop();running=false;connected=false
         peers.removeAll();activeClientID=nil;status="Stopped."
     }
     func refresh() async {
@@ -65,11 +87,12 @@ import SpatialCore
         sendPermissions()
     }
     func setSpeech(_ enabled:Bool){speechEnabled=enabled;sendPermissions()}
-    func emergencyStop() {setControl(false);setSharing(false);setSpeech(false);status="Emergency stop: sharing and remote control are off."}
+    func emergencyStop() {setControl(false);setSharing(false);setSpeech(false);setReply(false);confirmations.clear();status="Emergency stop: sharing and remote control are off."}
     func requestScreenPermission(){_ = CGRequestScreenCaptureAccess();Task{await refresh()}}
     func requestAccessibility(){_ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String:true] as CFDictionary)}
     private func sendPermissions() {
         var m=Message("permissions");m.controlEnabled=controlEnabled;m.sharingEnabled=sharingEnabled;m.speechEnabled=speechEnabled
+        m.assistantEnabled=assistantHasKey;m.messagesEnabled=messagesEnabled;m.replyEnabled=replyEnabled
         peers["control"]?.send(m)
     }
     private func sendCatalog() {
@@ -136,6 +159,17 @@ import SpatialCore
             }
         case "unsubscribe":
             if let id=m.streamID{input.releaseAll();Task{await capture.stop(id);var r=Message("unsubscribed");r.streamID=id;peer.send(r)}}
+        case "assistant_ask":
+            guard let text=ControlValidation.assistantAsk(m) else{error("Invalid question.",to:peer);return}
+            handleAssistantAsk(text,requestID:m.requestID,peer:peer)
+        case "confirm":
+            guard let c=ControlValidation.confirm(m) else{error("Invalid confirmation.",to:peer);return}
+            if let call=confirmations.resolve(id:c.id,approve:c.approve){execute(call)}
+            else if c.approve{error("That confirmation expired or was already used.",to:peer)}
+        case "message_reply":
+            guard let r=ControlValidation.messageReply(m) else{error("Invalid reply.",to:peer);return}
+            sendReply(notificationID:r.id,text:r.text,to:peer)
+        case "dismiss":break
         case "pointer","text","shortcut","launch":
             guard controlEnabled,sharingEnabled,Date().timeIntervalSince(lastHeartbeat)<3 else{error("Mac remote control is not armed.",to:peer);return}
             do{try input.apply(m,handle:m.streamID.flatMap{capture.sessions[$0]})}
@@ -147,10 +181,132 @@ import SpatialCore
         guard peers[peer.role]?.id==peer.id else{return}
         peers.removeValue(forKey:peer.role)
         if peer.role=="control" || peer.role=="video" {
-            input.releaseAll();controlEnabled=false;connected=false
+            input.releaseAll();controlEnabled=false;connected=false;replyEnabled=false;confirmations.clear()
             let old=Array(peers.values);peers.removeAll();activeClientID=nil
             for p in old{p.close()}
             Task{await capture.stopAll()};status="Headset disconnected. Input disarmed."
         }
     }
+    // MARK: Messages -> headset
+    func setMessages(_ on:Bool) {
+        messagesEnabled=on;UserDefaults.standard.set(on,forKey:"messagesEnabled")
+        if on{if running{startWatcher()}else{messagesStatus="Will start with the server."}}
+        else{watcher.stop();recent.removeAll();setReply(false);messagesStatus="Off."}
+        sendPermissions()
+    }
+    func setMessagePreview(_ on:Bool){messagePreview=on;UserDefaults.standard.set(on,forKey:"messagePreview")}
+    func setContactLookup(_ on:Bool) {
+        contactLookup=on;UserDefaults.standard.set(on,forKey:"contactLookup");watcher.lookUpContacts=on
+        if on{MessageWatcher.requestContactsAccess{_ in}}
+    }
+    func setAssistantReadsMessages(_ on:Bool){assistantReadsMessages=on;UserDefaults.standard.set(on,forKey:"assistantReadsMessages")}
+    func setReply(_ on:Bool){replyEnabled=on && connected && messagesEnabled;sendPermissions()}
+    private func startWatcher() {
+        watcher.lookUpContacts=contactLookup
+        watcher.onStatus={[weak self] text in Task{@MainActor in self?.messagesStatus=text}}
+        watcher.onMessage={[weak self] message in Task{@MainActor in self?.ingest(message)}}
+        watcher.start();messagesStatus="Starting…"
+    }
+    private func ingest(_ m:IncomingMessage) {
+        guard messagesEnabled else{return}
+        let id=UUID().uuidString
+        recent.append(RecentNotification(id:id,sender:m.sender,body:m.body,chatGUID:m.chatGUID))
+        if recent.count>20{recent.removeFirst()}
+        guard connected,let control=peers["control"] else{return}
+        var n=Message("notification");n.notificationID=id;n.title=m.sender
+        n.body=messagePreview ? m.body:"New message";n.appName="Messages";n.category="message"
+        n.replyable=replyEnabled && m.chatGUID != nil
+        control.send(n)
+    }
+    private func sendReply(notificationID:String,text:String,to peer:SecurePeer?) {
+        guard replyEnabled,Date().timeIntervalSince(lastReplyAt)>2,
+              let n=recent.first(where:{$0.id==notificationID}),let guid=n.chatGUID else {
+            if let peer{error("Replying is off, too fast, or the message is unknown. Nothing was sent.",to:peer)}
+            return
+        }
+        lastReplyAt=Date()
+        Task {
+            do{try await MessageSender.send(text:text,chatGUID:guid);_ = toast(title:"Reply sent",body:n.sender)}
+            catch{if let p=peers["control"]{self.error(error.localizedDescription,to:p)}}
+        }
+    }
+    // MARK: Commands usable from the headset protocol, Siri / Shortcuts and the assistant
+    @discardableResult func sendUICommand(_ command:String,arg:String?=nil,value:Double?=nil) -> Bool {
+        guard connected,let p=peers["control"] else{return false}
+        var m=Message("ui_command");m.command=command;m.arg=arg;m.value=value;p.send(m);return true
+    }
+    @discardableResult func toast(title:String,body:String) -> Bool {
+        guard connected,let p=peers["control"] else{return false}
+        var m=Message("notification");m.notificationID=UUID().uuidString;m.title=TextSanitizer.clean(title,maxLength:60)
+        m.body=TextSanitizer.clean(body,maxLength:240);m.appName="SpatialMac";m.category="custom";m.replyable=false
+        p.send(m);return true
+    }
+    func ensureStarted(){if !running{start()}}
+    // MARK: Assistant (ChatGPT)
+    func saveAPIKey(_ key:String) {
+        let trimmed=key.trimmingCharacters(in:.whitespacesAndNewlines)
+        guard trimmed.count>=20 else{status="That does not look like an API key.";return}
+        assistantHasKey=KeychainStore.write(AssistantService.keychainAccount,trimmed);sendPermissions()
+    }
+    func removeAPIKey(){KeychainStore.delete(AssistantService.keychainAccount);assistantHasKey=false;assistant.newConversation();sendPermissions()}
+    func newAssistantConversation(){assistant.newConversation()}
+    func askAssistant(_ text:String) async -> String {
+        do{
+            let reply=try await assistant.ask(text,model:assistantModel.isEmpty ? "gpt-5":assistantModel,host:self)
+            lastAssistantReply=reply;return reply.isEmpty ? "Done.":reply
+        }catch{return error.localizedDescription}
+    }
+    private func handleAssistantAsk(_ text:String,requestID:String?,peer:SecurePeer) {
+        guard assistantHasKey else{error(AssistantFailure.noKey.errorDescription ?? "No API key.",to:peer);return}
+        guard !assistantBusy else{error("The assistant is still working on the last request.",to:peer);return}
+        assistantBusy=true
+        var state=Message("assistant_state");state.action="thinking";state.requestID=requestID;peer.send(state)
+        Task {
+            defer{assistantBusy=false}
+            let reply=await askAssistant(text)
+            var m=Message("assistant_reply");m.requestID=requestID;m.text=TextSanitizer.clean(reply,maxLength:4000,preserveLines:true)
+            peers["control"]?.send(m)
+        }
+    }
+    func performTool(_ call:ValidatedCall) -> String {
+        switch call.risk {
+        case .readOnly:
+            if call.command=="get_workspace_state" {
+                let list=sources.filter{approved.contains($0.id)}.prefix(20).map{"\($0.app) — \($0.title)"}
+                return list.isEmpty ? "No sources are approved.":OpenAIWire.untrusted(list.joined(separator:"\n"))
+            }
+            guard messagesEnabled,assistantReadsMessages else{return "The user has not allowed the assistant to read messages."}
+            let items=recent.suffix(Int(call.value ?? 5)).map{"[\($0.id)] \($0.sender): \($0.body)"}
+            return items.isEmpty ? "No recent messages.":OpenAIWire.untrusted(items.joined(separator:"\n"))
+        case .reversibleUI:
+            guard connected else{return "The headset is not connected. Nothing changed."}
+            if call.command=="show_notification"{_ = toast(title:call.arg ?? "",body:call.body ?? "");return "Shown."}
+            sendUICommand(call.command,arg:call.arg,value:call.value);return "Sent to the headset."
+        case .consequential:
+            guard connected,let control=peers["control"] else{return "The headset is not connected. Nothing was done."}
+            let summary:String
+            switch call.command {
+            case "launch_app":summary="Open \(call.arg ?? "an app") on the Mac"
+            case "reply_to_message":
+                guard replyEnabled,let n=recent.first(where:{$0.id==call.arg}) else{return "Replying is turned off on the Mac, or the message is unknown. Nothing was done."}
+                summary="Reply to \(n.sender): “\(call.body ?? "")”"
+            default:return "Unsupported action."
+            }
+            guard let pending=confirmations.add(call,summary:summary) else{return "Too many pending confirmations. Nothing was done."}
+            var m=Message("confirm_request");m.confirmID=pending.id;m.title="Confirm action";m.body=summary;control.send(m)
+            return "Awaiting the user's confirmation in the headset. Do not retry this action."
+        }
+    }
+    private func execute(_ call:ValidatedCall) {
+        switch call.command {
+        case "launch_app":
+            guard let id=call.arg,InputValidation.apps.contains(id),let url=NSWorkspace.shared.urlForApplication(withBundleIdentifier:id) else{return}
+            NSWorkspace.shared.openApplication(at:url,configuration:NSWorkspace.OpenConfiguration(),completionHandler:{_,_ in})
+            _ = toast(title:"Opening app",body:url.deletingPathExtension().lastPathComponent)
+        case "reply_to_message":
+            if let id=call.arg,let text=call.body{sendReply(notificationID:id,text:text,to:peers["control"])}
+        default:break
+        }
+    }
+
 }

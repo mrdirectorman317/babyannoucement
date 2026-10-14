@@ -37,3 +37,10 @@ jobs:
       - name: Build host (ScreenCaptureKit, Network, App Intents code, ...)
         working-directory: macOS
         run: swift build -c release --product SpatialMacHost
+      - name: Build as a real Xcode app (App Intents metadata for Siri)
+        run: |
+          brew install xcodegen
+          cd macOS && xcodegen generate --spec project.yml
+          xcodebuild -project SpatialMac.xcodeproj -scheme SpatialMacHost -configuration Release \
+            -derivedDataPath ../Build/DerivedData CODE_SIGN_IDENTITY=- build | tail -40
+          ls ../Build/DerivedData/Build/Products/Release/SpatialMacHost.app/Contents/Resources | head

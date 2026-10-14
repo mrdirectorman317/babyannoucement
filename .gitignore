@@ -14,3 +14,4 @@ client-config.json
 *.wav
 *.apk
 *.app/
+macOS/SpatialMac.xcodeproj/

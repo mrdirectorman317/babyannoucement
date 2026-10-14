@@ -1,0 +1,31 @@
+# XcodeGen spec. `scripts/make-xcodeproj.sh` turns this into SpatialMac.xcodeproj.
+# Why: Siri / Shortcuts only discover App Intents when Xcode's build system extracts their metadata,
+# which a plain `swift build` + hand-made .app bundle does not do.
+name: SpatialMac
+options:
+  bundleIdPrefix: org.spatialmac
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  SpatialMac:
+    path: .
+targets:
+  SpatialMacHost:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/SpatialMacHost
+    dependencies:
+      - package: SpatialMac
+        product: SpatialCore
+    settings:
+      base:
+        PRODUCT_NAME: SpatialMacHost
+        PRODUCT_BUNDLE_IDENTIFIER: org.spatialmac.host
+        INFOPLIST_FILE: Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
