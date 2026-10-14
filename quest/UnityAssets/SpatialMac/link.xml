@@ -1,0 +1,10 @@
+<linker>
+  <assembly fullname="Assembly-CSharp">
+    <type fullname="SpatialMac.Message" preserve="all"/>
+    <type fullname="SpatialMac.ClientConfig" preserve="all"/>
+    <type fullname="SpatialMac.SourceDTO" preserve="all"/>
+    <type fullname="SpatialMac.RectDTO" preserve="all"/>
+    <type fullname="SpatialMac.SavedLayout" preserve="all"/>
+    <type fullname="SpatialMac.SavedPanel" preserve="all"/>
+  </assembly>
+</linker>

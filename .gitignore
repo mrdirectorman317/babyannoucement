@@ -1,0 +1,16 @@
+.DS_Store
+.build/
+Build/
+Library/
+Temp/
+Logs/
+obj/
+UserSettings/
+Secrets/
+client-config.json
+*.p12
+*.key
+*.pem
+*.wav
+*.apk
+*.app/
