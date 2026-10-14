@@ -21,7 +21,7 @@ namespace SpatialMac {
             // Circular mean of where the movable windows currently are (horizontal direction from the head).
             Vector3 sum = Vector3.zero; int count = 0;
             foreach (var p in session.Panels) {
-                if (p.Mode == PlacementMode.PersistentLocked) continue;
+                if (!PanelRules.CanRecenter(p.Mode)) continue;      // locked/pinned windows stay where they are
                 Vector3 d = Vector3.ProjectOnPlane(p.transform.position - head, Vector3.up);
                 if (d.sqrMagnitude < 0.01f) continue;
                 sum += d.normalized; count++;
@@ -30,7 +30,7 @@ namespace SpatialMac {
             float delta = Vector3.SignedAngle(sum.sqrMagnitude < 0.0001f ? forward : sum.normalized, forward, Vector3.up);
             var rot = Quaternion.AngleAxis(delta, Vector3.up);
             foreach (var p in session.Panels) {
-                if (p.Mode == PlacementMode.PersistentLocked) continue;
+                if (!PanelRules.CanRecenter(p.Mode)) continue;
                 var t = p.transform;
                 t.SetPositionAndRotation(head + rot * (t.position - head), rot * t.rotation);
                 if (p.Mode == PlacementMode.Follow) p.Follower.CaptureOffset();

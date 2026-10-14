@@ -17,7 +17,7 @@ namespace SpatialMac {
         public PushToTalkMicrophone microphone;
         // Optional experience services; created automatically in Start() if the scene does not have them.
         public NotificationFeed notifications;public AssistantPanel assistantPanel;public ImmersionDimmer dimmer;
-        public RecenterCrown crown;public SpeechOutput speechOutput;
+        public RecenterCrown crown;public SpeechOutput speechOutput;public RoomManager rooms;
         // Video. Hardware H.264 is requested only on the headset build; the Editor (and any decoder failure) uses JPEG.
         public enum VideoPreference{Auto,H264,Jpeg}
         public VideoPreference videoPreference=VideoPreference.Auto;public int videoWidth=1920;
@@ -78,7 +78,6 @@ namespace SpatialMac {
         readonly Queue<uint> subscriptions=new Queue<uint>();
         ClientConfig config;SecureLane control,video,audio;uint nextID=1,pending;
         int networkEpoch;
-        readonly HashSet<uint> anchorInFlight=new HashSet<uint>();
         int queuedMessages;float nextPing,lastPong,subscribeSentAt;bool connecting,shuttingDown;
         readonly string sessionID=Guid.NewGuid().ToString();
         public string SessionID=>sessionID;
@@ -97,8 +96,9 @@ namespace SpatialMac {
             if(assistantPanel==null)assistantPanel=gameObject.AddComponent<AssistantPanel>();
             if(dimmer==null)dimmer=gameObject.AddComponent<ImmersionDimmer>();
             if(crown==null)crown=gameObject.AddComponent<RecenterCrown>();
+            if(rooms==null)rooms=gameObject.AddComponent<RoomManager>();
             if(speechOutput==null)speechOutput=gameObject.AddComponent<SpeechOutput>();
-            notifications.session=this;assistantPanel.session=this;dimmer.session=this;crown.session=this;
+            notifications.session=this;assistantPanel.session=this;dimmer.session=this;crown.session=this;rooms.session=this;
         }
         public void Connect() {
             if(connecting||Connected||config==null)return;
@@ -249,34 +249,33 @@ namespace SpatialMac {
             Selected=panel;return control.Send(m);
         }
         public void ReleaseAll(){PointerOwner=-1;control?.Send(new Message("release_all"));}
+        // Every placement change goes through here so leaving a room pin always removes its saved record.
+        public void ChangePlacement(SpatialPanel panel,PlacementMode mode) {
+            if(panel==null)return;
+            if(PanelRules.LeavingRoomBinding(panel.Mode,mode))rooms?.Unpin(panel);
+            panel.SetPlacement(mode);SaveLayout();
+        }
         public void PanelAction(SpatialPanel panel,string action) {
             Selected=panel;
             switch(action) {
-                case "follow":panel.SetPlacement(PlacementMode.Follow);break;
-                case "toggle_follow":panel.SetPlacement(panel.Mode==PlacementMode.Follow?PlacementMode.World:PlacementMode.Follow);break;
-                case "world":panel.SetPlacement(PlacementMode.World);break;
-                case "lock":panel.SetPlacement(panel.Locked?PlacementMode.World:PlacementMode.SessionLocked);break;
-                case "remember":RememberPanel(panel);return;
+                case "follow":ChangePlacement(panel,PlacementMode.Follow);return;
+                case "toggle_follow":ChangePlacement(panel,panel.Mode==PlacementMode.Follow?PlacementMode.World:PlacementMode.Follow);return;
+                case "world":ChangePlacement(panel,PlacementMode.World);return;
+                case "lock":   // Lock freezes this session; on a pinned window it means "unpin" (explicitly, so nothing lingers)
+                    if(panel.Mode==PlacementMode.PersistentLocked)rooms?.Unpin(panel);
+                    else ChangePlacement(panel,panel.Locked?PlacementMode.World:PlacementMode.SessionLocked);
+                    return;
+                case "remember":case "pin":RememberPanel(panel);return;
+                case "unpin":rooms?.Unpin(panel);return;
                 case "refresh":RefreshPanel(panel);return;
                 case "close":ClosePanel(panel);return;
             }
             SaveLayout();
         }
-        public async void RememberPanel(SpatialPanel panel) {
-            if(anchorProvider==null||!anchorProvider.IsPersistent){Status="Persistent anchor provider is not configured. Session lock is available; no permanent pin was saved.";return;}
-            if(panel==null||!anchorInFlight.Add(panel.StreamID)){Status="Anchor operation already running.";return;}
-            uint operationID=panel.StreamID;
-            string old=panel.AnchorID;
-            try {
-                var result=await anchorProvider.CreateAndSave(new Pose(panel.transform.position,panel.transform.rotation));
-                if(panel==null){await anchorProvider.Erase(result.id);return;}
-                panel.transform.SetParent(result.root,true);panel.AnchorID=result.id;panel.SetPlacement(PlacementMode.PersistentLocked);SaveLayout();
-                if(!string.IsNullOrEmpty(old)&&old!=result.id)await anchorProvider.Erase(old);
-                Status="Anchor saved. Verify it relocalizes after restart before relying on it.";
-            }catch(Exception e){Status="Anchor not saved: "+e.Message;}finally{anchorInFlight.Remove(operationID);}
-        }
-        public void SaveLayout(){try{LayoutStore.Save(Panels,sessionID);}catch(Exception e){Status="Layout save failed: "+e.Message;}}
-        public async void RestoreLayout(){await LayoutStore.Restore(this);}
+        // "Pin to room": the window is saved relative to the active room's anchor (see RoomManager).
+        public void RememberPanel(SpatialPanel panel){if(rooms==null){Status="Rooms are not available.";return;}rooms.PinPanel(panel);}
+        public void SaveLayout(){rooms?.Save();}
+        public void RestoreLayout(){rooms?.RestoreOrDetect();}
         public void SummonMenu(){if(menu==null||head==null)return;Vector3 direction=Vector3.ProjectOnPlane(head.forward,Vector3.up).normalized;if(direction.sqrMagnitude<0.1f)direction=Vector3.forward;
             menu.transform.SetPositionAndRotation(head.position+direction*1.1f,Quaternion.LookRotation(direction,Vector3.up));menu.gameObject.SetActive(true);menu.Rebuild();}
         public void RefreshSources(){control?.Send(new Message("list_sources"));}

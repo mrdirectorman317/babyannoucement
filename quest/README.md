@@ -85,9 +85,9 @@ Pinch thresholds in source are tuning values, not universal calibration. Test sl
 
 With Meta XR Core configured, enable its required spatial-anchor feature/capabilities and permissions. Add MetaAnchorProvider to the service object and assign DesktopSession.anchorProvider. The optional adapter was written against the documented result-based `SaveAnchorAsync`, `EraseAnchorAsync`, and unbound-anchor load/localize flow. Verify the exact installed SDK signatures before enabling the symbol. The cited v71 reference is an API reference, not a claim that v71 is the correct latest package for your build. [R8, R9]
 
-First prove the official anchor sample on the headset. Then place one SpatialMac panel, choose **remember**, wait for success, quit, relaunch, reconnect/reapprove the source, and choose **restore**. The source must still be unambiguously identifiable and approved. The anchor must localize. Session-only panels deliberately do not restore using old unanchored world coordinates after a new application session.
+First prove the official anchor sample on the headset. Then, in the Home view, press **New room**, place one SpatialMac panel and press **Pin to room**; wait for success, quit, relaunch, reconnect, and press **Find room**. See `docs/ROOMS.md`. The source must still be unambiguously identifiable and approved. The anchor must localize. Session-only panels deliberately do not restore using old unanchored world coordinates after a new application session.
 
-Anchor delete/forget management is unfinished. Closing a panel currently removes the panel/subscription, not a complete user-facing saved-anchor record. Add this lifecycle UI and cleanup before repeated real-house experiments generate orphaned saved anchors.
+Forgetting a room queues its anchor for erasure (it can only be erased while localized in that room). Verify on the headset that the queue drains.
 
 ## H. Network and microphone permissions
 

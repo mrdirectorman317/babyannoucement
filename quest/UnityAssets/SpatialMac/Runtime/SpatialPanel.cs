@@ -2,7 +2,6 @@ using System;
 using UnityEngine;
 
 namespace SpatialMac {
-    public enum PlacementMode { World, SessionLocked, Follow, PersistentLocked }
     public enum HitKind { Desktop, Border, Corner, Button }
 
     // A Mac window/display shown as a floating glass window (visionOS-style):
@@ -16,7 +15,7 @@ namespace SpatialMac {
         public float Width { get; private set; } = 0.9f;
         public float Height { get; private set; } = 0.50625f;
         public float Aspect { get; private set; } = 16f / 9f;
-        public bool Locked => Mode == PlacementMode.SessionLocked || Mode == PlacementMode.PersistentLocked;
+        public bool Locked => PanelRules.IsLocked(Mode);
         public bool Manipulating;
         public float SafetyOpacity = 1f;
         public string AnchorID = "";
@@ -134,7 +133,7 @@ namespace SpatialMac {
 
         void RefreshChrome() {
             if (title == null) return;
-            string tag = Mode == PlacementMode.Follow ? "  ·  following you" : Mode == PlacementMode.SessionLocked ? "  ·  locked" : Mode == PlacementMode.PersistentLocked ? "  ·  pinned to room" : "";
+            string tag = Mode == PlacementMode.Follow ? "  ·  following you" : Mode == PlacementMode.SessionLocked ? "  ·  locked" : Mode == PlacementMode.PersistentLocked ? "  ·  pinned" + (Session != null && Session.rooms != null && Session.rooms.Book.Active != null ? " to " + Session.rooms.Book.Active.name : " to room") : "";
             baseTitle = GlassUI.Truncate(Source.app + (string.IsNullOrEmpty(Source.title) || Source.title == "Untitled" ? "" : " — " + Source.title), 60) + tag;
             title.text = baseTitle;
             SetTool(0, Mode == PlacementMode.Follow ? "Following" : "Follow", Mode == PlacementMode.Follow);

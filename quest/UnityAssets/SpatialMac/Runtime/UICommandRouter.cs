@@ -21,6 +21,11 @@ namespace SpatialMac {
                     if (!double.IsNaN(m.value) && !double.IsInfinity(m.value)) s.dimmer?.SetLevel((float)Math.Max(0, Math.Min(1, m.value)));
                     break;
                 case "recenter": s.crown?.Recenter(); break;
+                case "switch_room":
+                    if (s.rooms == null) s.Status = "Rooms are not available.";
+                    else if (string.IsNullOrWhiteSpace(m.arg) || m.arg.Length > 48) s.Status = "Ignored a room command without a valid name.";
+                    else s.rooms.SwitchByName(VoiceCommandParser.Normalize(m.arg));
+                    break;
                 default: s.Status = "Ignored an unknown command from the Mac."; break;
             }
         }

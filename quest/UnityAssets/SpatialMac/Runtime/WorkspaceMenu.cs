@@ -10,6 +10,7 @@ namespace SpatialMac {
         readonly List<GameObject> generated = new List<GameObject>();
         TextMesh statusText, hintText; int page; bool wasConnected;
         const float W = 1.0f, H = 0.84f;
+        const int PageSize = 4;
 
         public void Rebuild() {
             foreach (var go in generated) { if (go != null) { go.SetActive(false); Destroy(go); } }
@@ -32,8 +33,8 @@ namespace SpatialMac {
             Button("Refresh", "sources", null, new Vector3(0.27f, 0.12f, -0.008f), new Vector2(0.15f, 0.04f), false);
             Button("More ›", "next", null, new Vector3(0.43f, 0.12f, -0.008f), new Vector2(0.15f, 0.04f), false);
             Button(session.VideoLabel, "video", null, new Vector3(0.02f, 0.12f, -0.008f), new Vector2(0.34f, 0.04f), false);
-            int begin = page * 5, end = Mathf.Min(begin + 5, session.Sources.Length);
-            if (begin >= session.Sources.Length) { page = 0; begin = 0; end = Mathf.Min(5, session.Sources.Length); }
+            int begin = page * PageSize, end = Mathf.Min(begin + PageSize, session.Sources.Length);
+            if (begin >= session.Sources.Length) { page = 0; begin = 0; end = Mathf.Min(PageSize, session.Sources.Length); }
             for (int i = begin; i < end; i++) {
                 SourceDTO source = session.Sources[i];
                 string title = GlassUI.Truncate(source.app + " — " + source.title, 58);
@@ -41,14 +42,19 @@ namespace SpatialMac {
             }
             if (session.Sources.Length == 0) Text(wasConnected ? "No windows approved yet. Check one on your Mac (SpatialMac Host)." : "Start the host on your Mac, then Connect.", 0.022f, GlassPalette.TextDim, new Vector3(-0.44f, 0.04f, -0.008f));
 
-            Text("ASSISTANT", 0.016f, GlassPalette.TextDim, new Vector3(-0.46f, -0.27f, -0.008f));
-            Button("Speak", "speech", null, new Vector3(-0.38f, -0.325f, -0.008f), new Vector2(0.17f, 0.055f), true);
-            Button("Ask ChatGPT", "ask", null, new Vector3(-0.19f, -0.325f, -0.008f), new Vector2(0.17f, 0.055f), session.AssistantEnabled);
-            Button("Restore", "restore", null, new Vector3(0f, -0.325f, -0.008f), new Vector2(0.17f, 0.055f), false);
-            Button(wasConnected ? "Disconnect" : "Connect", wasConnected ? "disconnect" : "connect", null, new Vector3(0.19f, -0.325f, -0.008f), new Vector2(0.17f, 0.055f), false);
-            Button(session.ShowStats ? "Stats on" : "Stats", "stats", null, new Vector3(0.38f, -0.325f, -0.008f), new Vector2(0.17f, 0.055f), session.ShowStats);
+            Text("ROOMS", 0.016f, GlassPalette.TextDim, new Vector3(-0.46f, -0.185f, -0.008f));
+            var rooms = session.rooms;
+            string[,] rm = { { rooms != null ? rooms.Label : "No rooms", "room_cycle" }, { "New room", "room_new" }, { "Pin window", "room_pin" }, { "Unpin", "room_unpin" }, { rooms != null && rooms.ForgetArmed ? "Confirm?" : "Forget", "room_forget" } };
+            for (int i = 0; i < 5; i++) Button(rm[i, 0], rm[i, 1], null, new Vector3(-0.38f + i * 0.19f, -0.23f, -0.008f), new Vector2(0.17f, 0.05f), i == 4 && rooms != null && rooms.ForgetArmed);
+
+            Text("ASSISTANT", 0.016f, GlassPalette.TextDim, new Vector3(-0.46f, -0.285f, -0.008f));
+            Button("Speak", "speech", null, new Vector3(-0.38f, -0.335f, -0.008f), new Vector2(0.17f, 0.055f), true);
+            Button("Ask ChatGPT", "ask", null, new Vector3(-0.19f, -0.335f, -0.008f), new Vector2(0.17f, 0.055f), session.AssistantEnabled);
+            Button("Find room", "restore", null, new Vector3(0f, -0.335f, -0.008f), new Vector2(0.17f, 0.055f), false);
+            Button(wasConnected ? "Disconnect" : "Connect", wasConnected ? "disconnect" : "connect", null, new Vector3(0.19f, -0.335f, -0.008f), new Vector2(0.17f, 0.055f), false);
+            Button(session.ShowStats ? "Stats on" : "Stats", "stats", null, new Vector3(0.38f, -0.335f, -0.008f), new Vector2(0.17f, 0.055f), session.ShowStats);
             Button("Hide", "hide", null, new Vector3(0.43f, 0.355f, -0.008f), new Vector2(0.1f, 0.04f), false);
-            hintText = Text("", 0.018f, GlassPalette.TextDim, new Vector3(-0.46f, -0.385f, -0.008f));
+            hintText = Text("", 0.018f, GlassPalette.TextDim, new Vector3(-0.46f, -0.39f, -0.008f));
             UpdateHint();
         }
         void UpdateHint() {
@@ -90,6 +96,11 @@ namespace SpatialMac {
                 case "dim_down": session.dimmer?.Nudge(-0.2f); break;
                 case "dim_up": session.dimmer?.Nudge(0.2f); break;
                 case "restore": session.RestoreLayout(); break;
+                case "room_cycle": session.rooms?.CycleRoom(); break;
+                case "room_new": session.rooms?.CreateRoomHere(); break;
+                case "room_pin": session.RememberPanel(session.Selected); break;
+                case "room_unpin": if (session.Selected == null) session.Status = "Select a window first."; else session.PanelAction(session.Selected, "unpin"); break;
+                case "room_forget": session.rooms?.ForgetActive(); break;
                 case "speech": session.ToggleSpeech(); break;
                 case "ask":
                     if (!string.IsNullOrWhiteSpace(session.Transcript)) session.AskAssistantWithTranscript(); else session.ToggleSpeech();

@@ -45,9 +45,7 @@ No joystick teleport/snap-turn system is installed. Controller sticks currently 
 
 ## Anchors and persistence
 
-Real anchor save/load/localize adapter code is present but not device-tested. The loader skips session-only world transforms after a new session. Room naming, room detection, anchor recovery UI, map reset handling, explicit forget/delete UI, bulk cleanup, anchor cancellation and quotas require implementation/testing.
-
-Closing a panel does not complete saved-anchor deletion. Repeated create/close experiments can leave saved anchors. Follow placements restore near the current head rather than pretending their old global coordinates are valid. Layout writing uses temporary-file replacement but needs a stronger atomic replace/backup strategy for crash safety.
+Rooms (named rooms, pinning, locking, forget, voice) are implemented and their logic is unit-tested (see `docs/ROOMS.md`), but the Meta anchor save/load/localize/erase calls, room auto-detection and the menu have never run on a headset. Not handled: map reset by the OS (a room may stop localizing and show "?"), anchor quotas, shared anchors, more than 8 pinned windows per room or 12 rooms. Erasing an anchor requires being localized in that room, so forgotten rooms are queued for erasure and may linger until you are back there. Follow placement is not remembered across sessions. The old `layout.json` is no longer read.
 
 ## Voice / assistant limitations
 

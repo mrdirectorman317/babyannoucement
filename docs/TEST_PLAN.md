@@ -43,6 +43,8 @@ Prove passthrough with an official sample, then switch within this workspace rep
 
 Prove one official persistent anchor, then create one app panel anchor. Quit/relaunch, restart the headset, relocalize, and restore. Test different lighting, temporarily looking away, leaving/reentering a tested room, deleting/resetting room data, and a missing/ambiguous Mac source. On failure, show a recoverable state and do not guess where the panel belongs.
 
+Rooms (see `docs/ROOMS.md`): create two rooms in different spaces; pin a window in each; relaunch and walk between them (auto-detect should pick the right one, "Find room" otherwise); "switch to <name>" closes one room's windows and opens the other's; try grabbing, resizing, Recenter and "bring this here" on a locked and on a pinned window (all must refuse, with a message); Unpin then relaunch (must not come back); Forget a room twice, then re-enter it and confirm the anchor erase queue drains; corrupt `rooms.json` and confirm a `.bad` copy and a clean start.
+
 Test explicit forgetting and cleanup once that UI is implemented. Report drift as an observed measurement under stated conditions; do not promise whole-house accuracy from a single successful restart.
 
 ## Voice

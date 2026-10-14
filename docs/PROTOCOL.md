@@ -97,7 +97,7 @@ All travel as JSON on the **control** lane. Unknown fields are ignored by both e
 | Direction | `type` | Fields | Notes |
 |---|---|---|---|
 | Mac -> Quest | `notification` | `notificationID, title, body, appName, category` (`message`\|`custom`), `replyable` | Text pre-sanitized and truncated (title 60, body 240). Display only - never executed |
-| Mac -> Quest | `ui_command` | `command, arg?, value?` | Allowlist: `set_environment`(`passthrough`\|`virtual`), `open_panel`(name), `panel_action`(`follow,world,lock,refresh,close,bring_here,bigger,smaller`), `set_dim`(0..1), `recenter`. Quest re-validates every argument |
+| Mac -> Quest | `ui_command` | `command, arg?, value?` | Allowlist: `set_environment`(`passthrough`\|`virtual`), `open_panel`(name), `panel_action`(`follow,world,lock,pin,unpin,refresh,close,bring_here,bigger,smaller`), `switch_room`(name), `set_dim`(0..1), `recenter`. Quest re-validates every argument |
 | Mac -> Quest | `assistant_state` | `action:"thinking"`, `requestID` | |
 | Mac -> Quest | `assistant_reply` | `requestID, text` (<= 4000) | |
 | Mac -> Quest | `confirm_request` | `confirmID, title, body` | Human must approve in the headset |

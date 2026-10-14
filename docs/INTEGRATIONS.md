@@ -51,7 +51,7 @@ The model is given only these tools (`AssistantPolicy.swift`; risk tier is decid
 
 | Tool | Tier | Effect |
 |---|---|---|
-| `set_environment`, `open_source`, `panel_action`, `set_dim`, `recenter`, `show_notification` | reversible UI | Runs immediately in the headset UI |
+| `set_environment`, `open_source`, `panel_action` (incl. `pin`/`unpin`), `switch_room`, `set_dim`, `recenter`, `show_notification` | reversible UI | Runs immediately in the headset UI |
 | `get_workspace_state`, `get_recent_notifications` | read-only | Returns data to the model. Messages are only readable if you enabled "Let the assistant read recent messages", and are wrapped as untrusted data |
 | `launch_app` (allowlisted bundle ids only), `reply_to_message` | **consequential** | Becomes a **Confirm** card in the headset showing the exact action/text. Nothing happens until you tap Approve. One-shot, expires in 60 s, max 4 pending. The model cannot approve its own request |
 

@@ -26,7 +26,7 @@ public struct ValidatedCall: Equatable {
 }
 
 public enum AssistantTools {
-    public static let panelActions: Set<String> = ["follow", "world", "lock", "refresh", "close", "bring_here", "bigger", "smaller"]
+    public static let panelActions: Set<String> = ["follow", "world", "lock", "pin", "unpin", "refresh", "close", "bring_here", "bigger", "smaller"]
     public static let environments: Set<String> = ["passthrough", "virtual"]
 
     public static let all: [AssistantToolSpec] = [
@@ -34,8 +34,10 @@ public enum AssistantTools {
             parameters: #"{"type":"object","properties":{"mode":{"type":"string","enum":["passthrough","virtual"]}},"required":["mode"],"additionalProperties":false}"#),
         AssistantToolSpec(name: "open_source", description: "Open a panel for an already-approved Mac window or display, matched by application name or window title.", risk: .reversibleUI,
             parameters: #"{"type":"object","properties":{"app":{"type":"string","description":"App name or title fragment, e.g. Safari"}},"required":["app"],"additionalProperties":false}"#),
-        AssistantToolSpec(name: "panel_action", description: "Act on the currently selected panel.", risk: .reversibleUI,
-            parameters: #"{"type":"object","properties":{"action":{"type":"string","enum":["follow","world","lock","refresh","close","bring_here","bigger","smaller"]}},"required":["action"],"additionalProperties":false}"#),
+        AssistantToolSpec(name: "panel_action", description: "Act on the currently selected panel. lock freezes it for this session; pin saves it to the current room; locked or pinned panels refuse resizing and moving.", risk: .reversibleUI,
+            parameters: #"{"type":"object","properties":{"action":{"type":"string","enum":["follow","world","lock","pin","unpin","refresh","close","bring_here","bigger","smaller"]}},"required":["action"],"additionalProperties":false}"#),
+        AssistantToolSpec(name: "switch_room", description: "Switch the headset to one of the user's saved rooms by name (closes the old room's pinned windows, opens the new room's).", risk: .reversibleUI,
+            parameters: #"{"type":"object","properties":{"name":{"type":"string","description":"Room name, e.g. office"}},"required":["name"],"additionalProperties":false}"#),
         AssistantToolSpec(name: "set_dim", description: "Dim the surroundings. 0 = no dimming, 1 = nearly dark.", risk: .reversibleUI,
             parameters: #"{"type":"object","properties":{"level":{"type":"number","minimum":0,"maximum":1}},"required":["level"],"additionalProperties":false}"#),
         AssistantToolSpec(name: "recenter", description: "Recenter the workspace in front of the user.", risk: .reversibleUI,
@@ -77,6 +79,9 @@ public enum AssistantTools {
         case "panel_action":
             guard let a = args["action"] as? String, panelActions.contains(a) else { return nil }
             return call("panel_action", arg: a)
+        case "switch_room":
+            guard let n = string("name", max: 40) else { return nil }
+            return call("switch_room", arg: n)
         case "set_dim":
             guard let v = (args["level"] as? NSNumber)?.doubleValue, v.isFinite, (0...1).contains(v) else { return nil }
             return call("set_dim", value: v)

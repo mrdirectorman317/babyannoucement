@@ -7,6 +7,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../UnityAssets/SpatialMac/Runtime/OneEuroFilter.cs" />
+    <Compile Include="../UnityAssets/SpatialMac/Runtime/PanelRules.cs" />
+    <Compile Include="../UnityAssets/SpatialMac/Runtime/RoomBook.cs" />
+    <Compile Include="../UnityAssets/SpatialMac/Runtime/TextLayout.cs" />
+    <Compile Include="../UnityAssets/SpatialMac/Runtime/VoiceCommandParser.cs" />
     <Compile Include="*.cs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
     <PackageReference Include="xunit" Version="2.7.0" />

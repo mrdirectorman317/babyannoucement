@@ -50,6 +50,18 @@ final class IntegrationTests: XCTestCase {
         XCTAssertNil(AssistantTools.validate(name: "panel_action", argumentsJSON: "not json"))
         XCTAssertNil(AssistantTools.validate(name: "show_notification", argumentsJSON: String(repeating: "x", count: 5000)))
     }
+    func testRoomTools() {
+        let r = AssistantTools.validate(name: "switch_room", argumentsJSON: #"{"name":"Office"}"#)
+        XCTAssertEqual(r?.command, "switch_room"); XCTAssertEqual(r?.arg, "Office"); XCTAssertEqual(r?.risk, .reversibleUI)
+        XCTAssertNil(AssistantTools.validate(name: "switch_room", argumentsJSON: #"{"name":""}"#))
+        XCTAssertNil(AssistantTools.validate(name: "switch_room", argumentsJSON: "{}"))
+        XCTAssertNotNil(AssistantTools.validate(name: "panel_action", argumentsJSON: #"{"action":"pin"}"#))
+        XCTAssertNotNil(AssistantTools.validate(name: "panel_action", argumentsJSON: #"{"action":"unpin"}"#))
+        XCTAssertNil(AssistantTools.validate(name: "panel_action", argumentsJSON: #"{"action":"delete_room"}"#))
+        // The schema enum must match the validator's allowlist exactly.
+        let schema = AssistantTools.spec(named: "panel_action")!.parameters
+        for a in AssistantTools.panelActions { XCTAssertTrue(schema.contains("\"\(a)\""), "schema missing \(a)") }
+    }
     func testConsequentialToolsAreClassifiedByCode() {
         XCTAssertEqual(AssistantTools.validate(name: "launch_app", argumentsJSON: #"{"bundle_id":"com.apple.Safari"}"#)?.risk, .consequential)
         XCTAssertEqual(AssistantTools.validate(name: "reply_to_message", argumentsJSON: #"{"notification_id":"a","text":"ok"}"#)?.risk, .consequential)

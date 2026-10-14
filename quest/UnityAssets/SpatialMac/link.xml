@@ -4,7 +4,10 @@
     <type fullname="SpatialMac.ClientConfig" preserve="all"/>
     <type fullname="SpatialMac.SourceDTO" preserve="all"/>
     <type fullname="SpatialMac.RectDTO" preserve="all"/>
-    <type fullname="SpatialMac.SavedLayout" preserve="all"/>
-    <type fullname="SpatialMac.SavedPanel" preserve="all"/>
+    <type fullname="SpatialMac.RoomBookData" preserve="all"/>
+    <type fullname="SpatialMac.Room" preserve="all"/>
+    <type fullname="SpatialMac.PanelRecord" preserve="all"/>
+    <type fullname="SpatialMac.PoseData" preserve="all"/>
+    <type fullname="SpatialMac.SourceKey" preserve="all"/>
   </assembly>
 </linker>

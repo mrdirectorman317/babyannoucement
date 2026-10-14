@@ -150,22 +150,8 @@ namespace SpatialMac {
             if (Font != null) { var mat = new Material(Font.material) { renderQueue = QueueText }; r.sharedMaterial = mat; }
             return tm;
         }
-        // Greedy word wrap for TextMesh (which has no wrapping of its own).
-        public static string Wrap(string text, int columns, int maxLines) {
-            if (string.IsNullOrEmpty(text)) return "";
-            var words = text.Split(' ');
-            var sb = new System.Text.StringBuilder();
-            int line = 0, col = 0;
-            foreach (var raw in words) {
-                string w = raw;
-                int nl = w.IndexOf('\n');
-                if (col > 0 && col + 1 + w.Length > columns) { sb.Append('\n'); line++; col = 0; if (line >= maxLines) { sb.Length = Mathf.Max(0, sb.Length - 1); sb.Append('…'); return sb.ToString(); } }
-                if (col > 0) { sb.Append(' '); col++; }
-                sb.Append(w); col += w.Length;
-                if (nl >= 0) { line++; col = 0; if (line >= maxLines) return sb.ToString(); }
-            }
-            return sb.ToString();
-        }
-        public static string Truncate(string s, int max) { return string.IsNullOrEmpty(s) || s.Length <= max ? s : s.Substring(0, max - 1) + "…"; }
+        // Greedy word wrap for TextMesh (which has no wrapping of its own). See TextLayout (unit-tested).
+        public static string Wrap(string text, int columns, int maxLines) { return TextLayout.Wrap(text, columns, maxLines); }
+        public static string Truncate(string s, int max) { return TextLayout.Truncate(s, max); }
     }
 }

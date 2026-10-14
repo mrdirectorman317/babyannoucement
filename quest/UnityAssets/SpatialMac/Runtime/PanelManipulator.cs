@@ -11,7 +11,7 @@ namespace SpatialMac {
         Vector3 startMid;Quaternion startFrame;
         bool resizing;Vector2 corner;Vector3 fixedCorner;Plane resizePlane;
         public bool Begin(int id,Pose pose,Ray ray,PanelHit hit) {
-            if(Panel.Locked||hands.ContainsKey(id)||hands.Count>=2)return false;
+            if(!PanelRules.CanMove(Panel.Mode)||hands.ContainsKey(id)||hands.Count>=2)return false;
             if(hands.Count>0&&(resizing||hit.kind==HitKind.Corner))return false;
             hands[id]=new Hand{pose=pose,ray=ray};
             Panel.Manipulating=true;

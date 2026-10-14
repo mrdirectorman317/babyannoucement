@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 - rooms and window locking (2026-10-14)
+- Named rooms (max 12), one anchor each; windows pinned relative to it (max 8); switch by voice, menu or the assistant (`switch_room`); two-press forget with queued anchor erasure; crash-safe saving from the room book; corrupt-file backup.
+- `PanelRules`: one definition of "locked" (session lock vs room pin) honoured by grabs, recenter, voice, Mac commands and the assistant. Leaving a pin always drops its saved record.
+- Voice parser extracted and unit-tested (allowlist; hostile/long input ignored). Text layout helper extracted and tested.
+- 119 engine-free tests (was 6). Replaces the old single `layout.json` (Follow persistence dropped).
+- Not device-tested: anchors, room detection, menu layout.
+
 ## 0.3.1 - HEVC first-class (2026-10-14)
 - HEVC (H.265) end to end: hardware-decoder detection on the headset, HEVC->H.264->JPEG fallback on both sides, lower starting bitrate, closed GOP, `Home > Video` codec switch, codec-config handoff to MediaCodec, HEVC fixture + mock + tests (incl. a real HEVC encode->decode test on macOS CI).
 
