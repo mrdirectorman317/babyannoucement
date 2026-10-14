@@ -117,3 +117,18 @@ On the Mac, enable one approved display capture. The initial target is **view on
 Confirm actual tracking, correct image orientation, readable text, controller ray alignment, global-pointer behavior, local border manipulation, corner anchoring, follow offsets, explicit passthrough, proper disconnect cleanup, and an accessible way to summon the menu. Test with a normal keyboard/trackpad before building a virtual keyboard. Keep the system boundary active.
 
 Record device footage and frame timings. Unity Editor success is not Quest IL2CPP success. A successful APK build is not proof that TLS, hand tracking, or saved anchors work at runtime. Complete the hardware test matrix in `docs/TEST_PLAN.md` before claiming those milestones.
+
+
+---
+
+# Addendum: new components (integration pass)
+
+New runtime scripts: `GlassUI` (palette, glass items, text), `SpatialAudio`, `NotificationFeed`, `AssistantPanel`, `ImmersionDimmer`, `RecenterCrown`, `SpeechOutput`, `UICommandRouter`. `DesktopSession.Start()` adds any that are missing, so existing scenes keep working.
+
+**Shaders now live in `Runtime/Resources/`** (`SpatialMacGlass`, `SpatialMacPanelSurface`, `SpatialMacVeil`) so they are included in player builds and loaded with `Resources.Load`. They are plain built-in-pipeline unlit shaders; if your project uses URP, they should still render (no `LightMode`), but verify - this is untested.
+
+**Preview the UI without a Mac or headset:** run `python3 tools/mock_host.py --directory /tmp/spatialmac-mock --create-config --demo`, copy its `client-config.json` to `Application.persistentDataPath`, press Play. The demo sends an iMessage-style toast after 4 s, answers "Ask ChatGPT" with canned replies, and shows a Confirm card for text containing "open". It never captures or controls anything.
+
+**Controls added:** hold left `X` (primaryButton) = recenter; palm-up left hand (needs `SPATIALMAC_XR_HANDS`) = Home window.
+
+**C# compile check without Unity:** `dotnet build quest/typecheck` (and `-p:Android=true`). It uses the older 2021.3 Unity reference assemblies, so it can miss Unity-6-only API differences.

@@ -1,9 +1,21 @@
-# Build status — October 14, 2026
+# Build status — October 14, 2026 (integration pass)
 
-Original source starter generated. No changes have been applied to the user's Mac, headset, or existing game repository.
+## Changed in this pass (see git history for exact files)
+- Imported the ChatGPT-authored starter into this repo; archived the old baby-announcement site to `archive/baby-announcement/`.
+- Fixed real compile errors (2 in Unity C#, 2+ in the Swift host) - `docs/ORIGINAL_HANDOFF_CORRECTIONS.md`.
+- Added: assistant tool policy + confirmations, OpenAI Responses wire layer, text sanitizer, iMessage decoder (SpatialCore, 17 new tests).
+- Added to the Mac host: Messages watcher/sender, ChatGPT assistant, optional OpenAI speech-to-text, Keychain store, Siri/Shortcuts App Intents, Integrations UI, XcodeGen project + script.
+- Added to the Quest client: glass shaders and UI toolkit, rebuilt `SpatialPanel`, notification toasts, assistant card, home window, dimmer, recenter crown, palm-up menu, spatial sounds, TTS, UI-command router.
+- Added tooling: `quest/typecheck` (C# compile without Unity), `tools/mock_host.py --demo`, `tools/demo_smoke.py`, `tools/make_calibration.py`, `scripts/make-xcodeproj.sh`, `scripts/setup-speech.sh`, GitHub Actions CI.
 
-**Executed:** 9 Swift XCTest cases; 17 Python unittest cases; loopback Python TLS control/video integration; exact JPEG transfer; wrong-pin rejection; shell syntax checks; Python bytecode compilation; Swift host syntax parsing.
+## Executed and observed
+See `docs/VALIDATION_REPORT.md` (commands, results, and what they do not prove).
 
-**Not executed:** macOS native compilation or runtime; Unity compilation; Android build; Quest deployment; hand tracking; passthrough; persistent anchors; actual speech transcription; performance measurements.
+## Not executed
+Unity import/compile in a real editor, any shader compile, Quest build/run, real ScreenCaptureKit capture, Accessibility input, chat.db reading, AppleScript send, Siri recognition, real OpenAI calls, microphone, hand tracking, passthrough, anchors, performance.
 
-**Next task:** read START_HERE_FOR_NEXT_CHAT.md, evaluate PippinVR as a possible foundation, then build a view-only physical Mac display panel on an actual Quest 3S. Do not start with arbitrary AI computer control.
+## Dependency versions actually used
+Swift 6.0.3 (Linux, local) and the Xcode/Swift on GitHub `macos-15` runners (see CI logs); .NET SDK 8.0 with `UnityEngine.Modules` 2021.3.33 reference assemblies for the C# type-check; Python 3.13. Unity/Meta/XR Hands versions: **not pinned yet** (`docs/VERSIONS_TO_PIN.md`).
+
+## Next smallest hardware-verifiable task
+`docs/WHEN_YOU_GET_BACK.md` step 0 (demo preview in the Unity Editor), then step 2 (one real Mac display on the Quest, view-only, no input). Do not enable remote control, replies or the assistant's consequential tools until that works.

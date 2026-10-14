@@ -87,3 +87,23 @@ Launch fields: `type:"launch"`, `appID` in the explicit host allowlist: Finder, 
 ## Extension discipline
 
 Negotiate a new version before introducing encoded-video packet types, alpha/chroma modes, ROI updates, audio playback, virtual displays, or arbitrary capabilities. Reject unknown operations by default. Add golden byte tests in Swift/Python and equivalent Unity tests. Do not reinterpret old fields in ways that make an old client send input to a new geometry.
+
+## Integration messages (additive; framing version stays 1)
+
+All travel as JSON on the **control** lane. Unknown fields are ignored by both ends; new optional `Message` fields are
+`title, body, appName, category, notificationID, confirmID, command, arg, value, replyable, assistantEnabled, messagesEnabled, replyEnabled`.
+`permissions` now also carries `assistantEnabled`, `messagesEnabled`, `replyEnabled`.
+
+| Direction | `type` | Fields | Notes |
+|---|---|---|---|
+| Mac -> Quest | `notification` | `notificationID, title, body, appName, category` (`message`\|`custom`), `replyable` | Text pre-sanitized and truncated (title 60, body 240). Display only - never executed |
+| Mac -> Quest | `ui_command` | `command, arg?, value?` | Allowlist: `set_environment`(`passthrough`\|`virtual`), `open_panel`(name), `panel_action`(`follow,world,lock,refresh,close,bring_here,bigger,smaller`), `set_dim`(0..1), `recenter`. Quest re-validates every argument |
+| Mac -> Quest | `assistant_state` | `action:"thinking"`, `requestID` | |
+| Mac -> Quest | `assistant_reply` | `requestID, text` (<= 4000) | |
+| Mac -> Quest | `confirm_request` | `confirmID, title, body` | Human must approve in the headset |
+| Quest -> Mac | `assistant_ask` | `requestID, text` (<= 2000) | Needs an API key on the Mac |
+| Quest -> Mac | `confirm` | `confirmID` (UUID), `action:"approve"\|"deny"` | One-shot, expires after 60 s |
+| Quest -> Mac | `message_reply` | `notificationID, text` (<= 500) | Only if `replyEnabled`; recipient is looked up on the Mac, never supplied by the headset |
+| Quest -> Mac | `dismiss` | `notificationID` | No-op today |
+
+`launch` allowlist now: Finder, Safari, TextEdit, Xcode, Messages, Notes, Calendar, Music, ChatGPT (`com.openai.chat`).

@@ -1,5 +1,17 @@
 # Known limitations — intentionally explicit
 
+> Updated after the integration pass. What changed: the Mac host **now compiles with a real Apple SDK in CI** and the Unity runtime **type-checks** (it did not before - see `docs/ORIGINAL_HANDOFF_CORRECTIONS.md`). Everything below about hardware, Unity runtime behavior, and permissions still stands.
+
+## Added with the integrations / glass UI (all unverified on hardware)
+
+- Glass/veil shaders, text sizing (`GlassUI.NewText` estimate), hit targets and layout have never run in Unity or on a Quest.
+- The Messages watcher depends on the private `chat.db` schema (can change with macOS updates) and Full Disk Access. Group chats, SMS/RCS forwarding, edits/unsends and message threads are only lightly handled. Sending uses `chat id` in AppleScript, which needs verification on your macOS.
+- Siri discovers intents only from the Xcode-built app; phrase recognition, localization and Shortcuts parameter UI are unchecked. Siri cannot run on the headset itself.
+- The assistant uses the OpenAI Responses API shapes as I know them; model names and fields may have changed. There is no streaming, no Realtime voice, no interrupt/cancel of an in-flight request, and conversation state is server-side via `previous_response_id`.
+- Spoken replies rely on Android TTS being present on the Quest; off by default.
+- The dimmer is a black sphere with alpha. Whether it dims the Meta passthrough underlay as intended depends on your camera/layer setup - verify.
+- Palm-up gesture thresholds are guesses.
+
 ## Not executed here
 
 No Apple SDK/native host build, no actual ScreenCaptureKit capture, no CGEvent injection, no Unity compilation, no IL2CPP build, no Quest deployment, no camera passthrough, no hand tracking, no saved-anchor test, and no real speech transcription occurred in this environment. Syntax checks and portable unit tests are narrower evidence.

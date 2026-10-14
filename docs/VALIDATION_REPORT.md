@@ -1,76 +1,29 @@
-# Validation report
+# Validation report (integration pass, 2026-10-14)
 
-Generated October 14, 2026 in a Linux x86_64 development container.
+Evidence only; each row says what it does **not** prove. Reproduce with the commands shown.
 
 ## Executed and observed
 
-| Check | Result | Scope |
-|---|---|---|
-| Swift `swift test` | **9 XCTest cases passed** | SpatialCore framing, metadata and input-validation helpers |
-| Python unittest | **17 cases passed** | Reference wire format, fragmented reads, invalid inputs, PCM and scalar resize math |
-| Python integration smoke | **Passed** | Pinned TLS control/video connections, source catalog, subscription, exact synthetic JPEG transfer, unsubscribe |
-| Wrong certificate pin | **Rejected** | Python client aborted before sending its pairing token |
-| Swift host `-frontend -parse` | **Passed** | Syntax only, not Apple API type checking or linking |
-| Shell `bash -n` | **Passed** | Four developer scripts; not executed on macOS/headset |
-| Python source compilation | **Passed** | Tools and tests parse/compile as Python |
-| Unity component filename check | **Passed** | Supplied attachable component classes match their script filenames |
-| C# preprocessor balance | **Passed** | Matching conditional blocks only, not C# compilation |
-| Info.plist and link.xml parsing | **Passed** | XML/plist well-formedness |
+| Check | Where | Result | Does NOT prove |
+|---|---|---|---|
+| `python3 -m unittest discover -s tests -v` | Linux + CI | 17 passed | Anything about Swift/Unity |
+| `python3 tools/integration_smoke.py` | Linux + CI | Passed: pinned TLS control+video, catalog, subscribe, exact JPEG, wrong pin rejected | Native implementations |
+| `python3 tools/demo_smoke.py` | Linux + CI | Passed: notification, assistant ask/confirm/reply, message reply, ui_command (mock) | That the Swift host/Unity client implement these identically |
+| `swift test` (macOS/ `cd macOS`) | Linux (Swift 6.0.3) + CI macOS-15 | 26 passed (9 original + 17 new: sanitizer, attributedBody, tool policy, confirmations, OpenAI shapes, validation) | Apple-framework behavior |
+| `swift build -c release --product SpatialMacHost` | CI macOS-15 (Xcode) | Compiles (ScreenCaptureKit, Network, SQLite3, Contacts, AppIntents, ...) | It runs, has the right permissions, or behaves correctly |
+| `xcodegen` + `xcodebuild` full app | CI macOS-15 | Builds `SpatialMacHost.app` | Siri discovers/recognizes the intents; app launches |
+| `dotnet build quest/typecheck` (+ `-p:Android=true`) | Linux + CI | 0 errors against Unity 2021.3 reference assemblies | Runs in Unity; shaders compile; Unity-6-only API; Meta/XR-Hands code (symbol-gated, not compiled) |
+| `bash -n scripts/*.sh` | CI | Syntax OK | Scripts work on a Mac |
 
-**Total portable unit cases: 26.** The additional integration smoke is separate. Swift's separate Testing runner may also print “0 tests”; the nine executed cases are XCTest cases, as shown in its suite output.
+CI history on the branch shows the failures that were found and fixed (compile errors listed in `ORIGINAL_HANDOFF_CORRECTIONS.md`).
 
-## What this does NOT prove
+## Not executed (honest list)
+Unity editor import; shader compilation; Quest APK; real display capture; CGEvent/Accessibility; chat.db reading on a real Messages database; AppleScript sending; Siri; real OpenAI requests; microphone/whisper; hand tracking; passthrough; anchors; any performance measurement; any security review.
 
-The Linux Swift package excludes the macOS executable target. It cannot verify ScreenCaptureKit, AppKit, Network.framework, Accessibility or CGEvent semantics. Swift syntax parsing does not type-check Apple APIs.
-
-No C# compiler, Unity installation, Meta SDK, Android build environment, Mac capture session or Quest headset was available to execute the target-native code. The protocol integration test runs **Python ↔ Python**, not Swift ↔ Unity. The audio socket, real microphone, local transcription, native video, hand tracking, passthrough, saved anchors, sustained frame rate and real input safety remain unverified.
-
-No APK, DMG or notarized application is supplied. The source should be compiled, debugged and tested on the target machines using the supplied acceptance plan. Native integration errors may remain.
-
-## Reproduce the portable checks
-
+## Reproduce
 ```bash
 python3 -m unittest discover -s tests -v
-(cd macOS && swift test)
-python3 tools/integration_smoke.py
-for f in scripts/*.sh; do bash -n "$f"; done
-python3 -m compileall -q tools tests
-```
-
-The integration check creates and deletes temporary test keys outside the repository. It requires OpenSSL and Python, listens only on loopback, uses a synthetic fixture, and never posts input to a computer.
-
-## Selected recorded output
-
-### Python unit tests
-
-```text
-----------------------------------------------------------------------
-Ran 17 tests in 0.002s
-
-OK
-```
-
-### Swift portable unit tests
-
-```text
-Test Suite 'All tests' started at 2026-10-14 15:52:03.036
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.106 (0.106) seconds
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.106 (0.106) seconds
-Test Suite 'All tests' passed at 2026-10-14 15:52:03.145
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.106 (0.106) seconds
-```
-
-### Python TLS integration
-
-```text
-PASS: control and video TLS lanes exercised through hello/catalog/subscribe/frame/unsubscribe.
-PASS: exact synthetic JPEG bytes transferred through pinned TLS.
-PASS: incorrect certificate pin rejected before sending pairing token.
-NOT TESTED: native macOS/Unity implementation, audio lane, headset or real Mac screen capture.
-```
-
-### Swift host syntax parse
-
-```text
-Command returned exit code 0 without output.
+python3 tools/integration_smoke.py && python3 tools/demo_smoke.py
+(cd macOS && swift test)          # SpatialCore only on Linux; full host on macOS
+dotnet build quest/typecheck && dotnet build quest/typecheck -p:Android=true
 ```

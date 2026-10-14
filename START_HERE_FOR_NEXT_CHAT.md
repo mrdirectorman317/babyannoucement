@@ -1,5 +1,7 @@
 # Build-agent handoff — read before modifying anything
 
+> **Update (integration pass):** this repository is no longer a pristine ChatGPT handoff. Read `BUILD_STATUS.md`, `docs/VALIDATION_REPORT.md` and `docs/ORIGINAL_HANDOFF_CORRECTIONS.md` first. The Mac host now compiles in CI on real macOS/Xcode and the Unity scripts type-check (`dotnet build quest/typecheck`). The "first concrete acceptance gate" below is **still unmet** - nothing has run on a headset. New features (glass UI, Messages, ChatGPT, Siri) are documented in `docs/INTEGRATIONS.md` and `docs/EXPERIENCE.md`. PippinVR was evaluated: `docs/FOUNDATION_DECISION.md`.
+
 ## The user's actual goal
 
 Build a customizable Quest 3S interface to a real Mac: macOS content all around the user; fully virtual custom worlds **and** real-room passthrough; panels that can be grabbed at their edges, resized at their corners, freely tilted/rotated, placed low/high/around a room, locked in place, or set to follow. Later, add dependable room persistence, hand-only interaction, voice dictation/commands, and a Jarvis-like assistant. Preserve the user's ability to build their own Unity worlds. Do not pivot this into a list of paid Quest games.

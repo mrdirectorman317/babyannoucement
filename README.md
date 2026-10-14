@@ -1,3 +1,35 @@
+# SpatialMac — your Mac, floating around you in a Quest 3S
+
+A spatial-computing workspace for a Meta Quest 3S that shows **your real Mac's** windows as floating glass panels (Vision-Pro-style), with passthrough or a virtual world, Siri/Shortcuts control, iMessage pop-ups, and a ChatGPT voice assistant.
+
+> **Status: a large, partly-verified source base, not a finished app.** What is *proven* vs *not yet run* is spelled out in
+> [`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md). Short version: the Mac host compiles with a real Apple SDK and its tests pass (CI), the Unity scripts type-check, the protocol flows pass against a mock - but **nothing has run in Unity or on a headset yet.**
+
+**Start here:** [`docs/WHEN_YOU_GET_BACK.md`](docs/WHEN_YOU_GET_BACK.md) (shortest path to running it) ·
+[`docs/EXPERIENCE.md`](docs/EXPERIENCE.md) (the Vision Pro feel) ·
+[`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md) (Siri, Messages, ChatGPT, voice) ·
+[`docs/ORIGINAL_HANDOFF_CORRECTIONS.md`](docs/ORIGINAL_HANDOFF_CORRECTIONS.md) (bugs found in the first draft).
+
+The previous contents of this repository (the baby announcement site) are preserved in [`archive/baby-announcement/`](archive/baby-announcement/) and are still intact on `main`.
+
+## What's in the box
+
+| Area | What it does | Verified |
+|---|---|---|
+| Glass panels | Rounded glass windows, grab bar, close, hover-reveal toolbar + corner handles, spatial sounds, open animation | Type-checks; not run in Unity |
+| Notifications | iMessage-style toasts (with Reply), lazy-follow | Protocol tested vs mock; UI not run |
+| Assistant | Listening / "You said" / ChatGPT / Confirm / Compose-reply card; typed, tiered tools; human confirmation | Policy unit-tested; host compiles |
+| Siri & Shortcuts | App Intents: open workspace, real room/virtual, recenter, note, ask, emergency stop | Compiles in an Xcode build; Siri not tried |
+| Voice | Push-to-talk -> local whisper.cpp or (opt-in) OpenAI speech-to-text | Compiles; not tried |
+| Environment | Passthrough/virtual switch (Meta layer adapter), dimmer, recenter "crown", palm-up menu | Type-checks (hands/Meta code is symbol-gated) |
+| Transport/security | Pinned-TLS, 3 lanes, token, generation-guarded input | Python<->Python tested; Swift compiles |
+
+CI (`.github/workflows/ci.yml`): Linux (Python tests, both smoke tests, Unity type-check) and macOS (real Xcode: `swift build`, `swift test`, full Xcode app build).
+
+---
+
+# Original starter README (kept for reference)
+
 # SpatialMac — Quest 3S spatial desktop starter
 
 **Prepared October 14, 2026. Working project name, not a cleared product name.**
