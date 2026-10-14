@@ -45,6 +45,7 @@ namespace SpatialMac {
             }
             if(!pinching&&previousPinch)Release();previousPinch=pinching;
         }
+        static Vector2 Clamp(Vector2 uv)=>new Vector2(Mathf.Clamp01(uv.x),Mathf.Clamp01(uv.y));
         bool Send(SpatialPanel panel,string action,Vector2 uv)=>session.SendInput(new Message("pointer"){streamID=panel.StreamID,generation=panel.Generation,action=action,u=uv.x,v=uv.y,button=0},panel);
         public void LostTracking(){Release();previousPinch=false;if(laser!=null)laser.enabled=false;}
         void Release(){

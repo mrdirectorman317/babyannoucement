@@ -99,7 +99,7 @@ namespace SpatialMac {
                 case "permissions":
                     ControlEnabled=m.controlEnabled;SharingEnabled=m.sharingEnabled;SpeechEnabled=m.speechEnabled;
                     if(!ControlEnabled)ReleaseAll();
-                    if(!SharingEnabled)foreach(var p in panels.Values)p.ClearPixels();
+                    if(!SharingEnabled)foreach(var shown in panels.Values)shown.ClearPixels();
                     break;
                 case "catalog":Sources=m.sources??Array.Empty<SourceDTO>();menu?.Rebuild();break;
                 case "subscribed":

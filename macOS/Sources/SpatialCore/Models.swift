@@ -39,12 +39,22 @@ public struct Message: Codable {
     public var u: Double?, v: Double?, dx: Double?, dy: Double?
     public var text: String?, appID: String?, error: String?, requestID: String?
     public var controlEnabled: Bool?, sharingEnabled: Bool?, speechEnabled: Bool?
+    // Integrations (additive; protocol framing version is unchanged).
+    public var assistantEnabled: Bool?, messagesEnabled: Bool?, replyEnabled: Bool?, replyable: Bool?
+    public var title: String?, body: String?, appName: String?, category: String?
+    public var notificationID: String?, confirmID: String?
+    public var command: String?, arg: String?, value: Double?
     public var sources: [SourceDTO]?
     public init(_ type: String) { self.type = type }
 }
 public enum InputValidation {
     public static let shortcuts: Set<String> = ["copy", "paste", "undo", "redo", "find", "select_all", "escape", "enter", "backspace", "tab"]
-    public static let apps: Set<String> = ["com.apple.finder", "com.apple.Safari", "com.apple.TextEdit", "com.apple.dt.Xcode"]
+    /// Explicit launch allowlist. The headset can never supply a path or command.
+    public static let apps: Set<String> = [
+        "com.apple.finder", "com.apple.Safari", "com.apple.TextEdit", "com.apple.dt.Xcode",
+        "com.apple.MobileSMS", "com.apple.Notes", "com.apple.iCal", "com.apple.Music",
+        "com.openai.chat"
+    ]
     public static func isValid(_ m: Message) -> Bool {
         switch m.type {
         case "pointer":

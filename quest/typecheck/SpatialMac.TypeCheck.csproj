@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Compile-only sanity check for the Unity runtime scripts WITHOUT a Unity install.
+    It compiles quest/UnityAssets/SpatialMac/Runtime against Unity's reference assemblies
+    (NuGet "UnityEngine.Modules", an unofficial mirror of the engine's public API surface,
+    version 2021.3 - older than Unity 6, so it can miss Unity-6-only API and cannot see Meta/XR-Hands types).
+    It proves the code type-checks. It does NOT prove it behaves correctly on a headset.
+    Run:  dotnet build quest/typecheck            (default symbols)
+          dotnet build quest/typecheck -p:Android=true   (also checks the UNITY_ANDROID branches)
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>CS0649;CS0414;CS0169;CS0067;CS1998;CS0108</NoWarn>
+    <DefineConstants Condition="'$(Android)'=='true'">$(DefineConstants);UNITY_ANDROID</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../UnityAssets/SpatialMac/Runtime/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

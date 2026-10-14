@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  portable:
+    name: Python + C# type-check (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: TLS integration smoke (Python <-> Python)
+        run: python3 tools/integration_smoke.py
+      - name: Shell syntax
+        run: for f in scripts/*.sh; do bash -n "$f"; done
+      - name: Unity runtime scripts type-check (default symbols)
+        run: dotnet build quest/typecheck -v q
+      - name: Unity runtime scripts type-check (UNITY_ANDROID branches)
+        run: dotnet build quest/typecheck -v q -p:Android=true
+
+  macos:
+    name: Mac host build + tests (real Apple SDK)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Swift tests (SpatialCore)
+        working-directory: macOS
+        run: swift test
+      - name: Build host (ScreenCaptureKit, Network, App Intents code, ...)
+        working-directory: macOS
+        run: swift build -c release --product SpatialMacHost
