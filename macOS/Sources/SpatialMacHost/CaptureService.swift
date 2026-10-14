@@ -63,7 +63,7 @@ struct CaptureHandle {
         config.queueDepth=3
         config.pixelFormat=wantVideo ? kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:kCVPixelFormatType_32BGRA
         // Video streams hide the Mac cursor: the headset draws its own instantly, so the pointer never lags the video.
-        config.showsCursor=!wantVideo;config.capturesAudio=false
+        config.showsCursor = !wantVideo;config.capturesAudio=false
         if wantVideo{config.colorMatrix=CGDisplayStream.yCbCrMatrix_ITU_R_709_2;config.colorSpaceName=CGColorSpace.sRGB}
         config.ignoreShadowsSingleWindow=true
         config.backgroundColor=CGColor(red:0,green:0,blue:0,alpha:1)

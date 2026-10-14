@@ -5,7 +5,7 @@ Unity Editor/probe testing proceed before the native Mac app is integrated.
 """
 import argparse,hashlib,hmac,json,secrets,socket,ssl,struct,subprocess,threading,time,uuid
 from pathlib import Path
-from protocol import Frame,json_packet,pack,read_packet
+from protocol import Frame,VideoFrame,json_packet,pack,read_packet,split_access_units
 
 DEMO_NOTES=[
     (4,dict(type='notification',notificationID='demo-1',title='Sam',body='Running 5 min late - save me a seat?',appName='Messages',category='message',replyable=True)),
@@ -24,8 +24,9 @@ def create_config(directory:Path,port:int):
     directory.chmod(0o700)
 
 class Mock:
-    def __init__(self,directory:Path,fixture:Path,demo:bool=False):
+    def __init__(self,directory:Path,fixture:Path,demo:bool=False,h264:Path|None=None):
         self.demo=demo
+        self.units=split_access_units(h264.read_bytes(),1) if h264 and h264.exists() else []
         self.config=json.loads((directory/'client-config.json').read_text());self.jpeg=fixture.read_bytes()
         self.context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);self.context.minimum_version=ssl.TLSVersion.TLSv1_2
         self.context.load_cert_chain(directory/'cert.pem',directory/'key.pem')
@@ -59,13 +60,18 @@ class Mock:
                 if kind!=1:continue
                 m=json.loads(data);t=m.get('type')
                 if role!='control':continue
-                if t=='ping':self.send(role,dict(type='pong',requestID=m.get('requestID')))
+                if t=='ping':self.send(role,dict(type='pong',requestID=m.get('requestID'),t0=m.get('t0'),t1=time.monotonic_ns()//1000))
+                elif t=='request_keyframe':
+                    with self.lock:
+                        sub=self.subscriptions.get(int(m.get('streamID',0)))
+                        if sub:sub['idx']=0
                 elif t=='list_sources':self.send(role,dict(type='catalog',sources=[self.source]))
                 elif t=='subscribe' and m.get('sourceID')=='display:1' and int(m.get('streamID',0))>0:
                     with self.lock:
-                        stream=int(m['streamID']);g=self.subscriptions.get(stream,(0,0))[0]+1
-                        self.subscriptions[stream]=(g,0)
-                        self.send(role,dict(type='subscribed',streamID=stream,generation=g))
+                        stream=int(m['streamID']);g=self.subscriptions.get(stream,{'g':0})['g']+1
+                        codec='h264' if m.get('codec')=='h264' and self.units else 'jpeg'
+                        self.subscriptions[stream]=dict(g=g,seq=0,codec=codec,idx=0)
+                        self.send(role,dict(type='subscribed',streamID=stream,generation=g,codec=codec))
                 elif t=='unsubscribe':
                     with self.lock:self.subscriptions.pop(int(m.get('streamID',0)),None)
                     self.send(role,dict(type='unsubscribed',streamID=m.get('streamID')))
@@ -108,16 +114,26 @@ class Mock:
         else:
             self.send('control',dict(type='assistant_reply',requestID=rid,text='This is the demo assistant. With a real OpenAI key on the Mac, ChatGPT answers here and can change your workspace.'))
     def frames(self):
+        tick=0;period=1/60;next_at=time.monotonic()
         while self.running:
-            time.sleep(.2)
+            next_at+=period;time.sleep(max(0,next_at-time.monotonic()));tick+=1
             with self.lock:
                 peer=self.roles.get('video')
                 if not peer:continue
-                for stream,(generation,sequence) in list(self.subscriptions.items()):
-                    f=Frame(stream,sequence,640,360,generation,time.monotonic_ns()//1000,self.jpeg)
-                    try:peer.sendall(pack(2,f.payload()))
+                for stream,sub in list(self.subscriptions.items()):
+                    try:
+                        if sub['codec']=='h264':
+                            unit=self.units[sub['idx']%len(self.units)]
+                            key=sub['idx']%len(self.units)==0
+                            flags=(VideoFrame.KEY|VideoFrame.PARAMS) if key else 0
+                            f=VideoFrame(stream,sub['seq'],1280,720,sub['g'],time.monotonic_ns()//1000,flags,1,unit)
+                            peer.sendall(pack(4,f.payload()));sub['idx']+=1
+                        elif tick%12==0:
+                            f=Frame(stream,sub['seq'],640,360,sub['g'],time.monotonic_ns()//1000,self.jpeg)
+                            peer.sendall(pack(2,f.payload()))
+                        else:continue
+                        sub['seq']+=1
                     except OSError:break
-                    self.subscriptions[stream]=(generation,sequence+1)
     def run(self):
         threading.Thread(target=self.frames,daemon=True).start()
         with socket.socket() as server:
@@ -130,8 +146,9 @@ class Mock:
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--directory',type=Path,required=True)
     p.add_argument('--create-config',action='store_true');p.add_argument('--demo',action='store_true',help='simulate notifications and the assistant (still no Mac input)');p.add_argument('--port',type=int,default=9444)
+    p.add_argument('--h264',type=Path,default=None,nargs='?',const=Path(__file__).resolve().parents[1]/'tests/fixtures/motion720p60.h264',help='stream a real 1280x720@60 H.264 test clip to clients that ask for h264')
     p.add_argument('--fixture',type=Path,default=Path(__file__).resolve().parents[1]/'tests/fixtures/calibration.jpg')
     a=p.parse_args()
     if a.create_config:create_config(a.directory,a.port)
-    Mock(a.directory,a.fixture,a.demo).run()
+    Mock(a.directory,a.fixture,a.demo,a.h264).run()
 if __name__=='__main__':main()

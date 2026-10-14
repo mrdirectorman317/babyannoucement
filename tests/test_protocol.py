@@ -42,3 +42,24 @@ class ProtocolTests(unittest.TestCase):
         self.assertAlmostEqual(s,2);fixed=(-w/2,-h/2);center=(fixed[0]+w*s/2,fixed[1]+h*s/2)
         self.assertAlmostEqual(center[0]-w*s/2,fixed[0]);self.assertAlmostEqual(center[1]-h*s/2,fixed[1])
 if __name__=='__main__':unittest.main()
+
+
+class VideoFrameTests(unittest.TestCase):
+    def test_golden_prefix_matches_swift(self):
+        from protocol import VideoFrame
+        f=VideoFrame(1,2,640,360,3,4,1,2,b'\x00\x00\x01\x26')
+        self.assertEqual(list(f.payload()[:28]),[0,0,0,1,0,0,0,2,2,128,1,104,0,0,0,3,0,0,0,0,0,0,0,4,1,2,0,0])
+    def test_roundtrip_and_rejects(self):
+        from protocol import VideoFrame,ProtocolError
+        f=VideoFrame(7,9,1920,1080,2,99,3,1,b'\x00\x00\x00\x01\x65\x88')
+        self.assertEqual(VideoFrame.parse(f.payload()),f)
+        for bad in (VideoFrame(0,1,2,2,1,0,0,1,b'\x00\x00\x01\x41'),VideoFrame(1,1,2,2,1,0,0,9,b'\x00\x00\x01\x41'),
+                    VideoFrame(1,1,2,2,1,0,0x80,1,b'\x00\x00\x01\x41'),VideoFrame(1,1,2,2,1,0,0,1,b'\x01\x02\x03\x04')):
+            with self.assertRaises(ProtocolError):bad.payload()
+        with self.assertRaises(ProtocolError):VideoFrame.parse(b'\x00'*28)
+    def test_split_access_units(self):
+        from protocol import split_access_units,is_key_unit
+        sps,pps,idr,p1,p2=b'\x00\x00\x00\x01\x67\x01',b'\x00\x00\x00\x01\x68\x02',b'\x00\x00\x00\x01\x65\x03',b'\x00\x00\x01\x41\x04',b'\x00\x00\x01\x41\x05'
+        units=split_access_units(sps+pps+idr+p1+p2)
+        self.assertEqual(units,[sps+pps+idr,p1,p2])
+        self.assertTrue(is_key_unit(units[0]));self.assertFalse(is_key_unit(units[1]))
