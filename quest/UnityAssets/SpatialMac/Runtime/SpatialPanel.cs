@@ -28,6 +28,7 @@ namespace SpatialMac {
         public VideoStreamDecoder Decoder;                           // owned by DesktopSession
         public int PixelWidth { get; private set; }
         public int PixelHeight { get; private set; }
+        public long JpegBytes;
         bool showingVideo; string baseTitle = ""; float nextStats;
 
         const float Pad = 0.028f, Radius = 0.022f;
@@ -170,6 +171,7 @@ namespace SpatialMac {
         public void Apply(JpegFrame frame) {
             if (frame.Generation != Generation || frame.StreamID != StreamID) return;
             UseJpeg();
+            JpegBytes += frame.Jpeg.Length;
             PixelWidth = frame.Width; PixelHeight = frame.Height;
             if (!ImageConversion.LoadImage(texture, frame.Jpeg, false)) return;
             if (texture.width != frame.Width || texture.height != frame.Height) { Session.Status = "Decoded dimensions do not match frame metadata."; return; }

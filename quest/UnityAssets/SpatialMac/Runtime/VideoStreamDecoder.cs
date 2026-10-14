@@ -23,6 +23,7 @@ namespace SpatialMac {
         public bool Failed { get; private set; }
         readonly ConcurrentQueue<VideoFrame> pending = new ConcurrentQueue<VideoFrame>();
         volatile bool needKeyframe = true, wantsKeyframe = true;
+        VideoFrame retry; int retryPumps;      // main thread only: a frame the codec had no input buffer for yet
         public long BytesReceived;
 
         // Called on the network thread.
@@ -48,7 +49,9 @@ namespace SpatialMac {
             if (Failed) return false;
             try {
                 int budget = 8;
-                while (budget-- > 0 && pending.TryDequeue(out VideoFrame f)) {
+                while (budget-- > 0) {
+                    VideoFrame f = retry; retry = null;
+                    if (f == null && !pending.TryDequeue(out f)) break;
                     if (needKeyframe && !f.IsKeyframe) { FramesDropped++; continue; }
                     if (f.IsKeyframe) needKeyframe = false;
                     if (!started) {
@@ -59,9 +62,13 @@ namespace SpatialMac {
                         started = true;
                     }
                     int r = java.Call<int>("queue", f.Bitstream, f.Bitstream.Length, (long)f.PtsMicros, f.IsKeyframe);
-                    if (r != 0) {                       // decoder is backed up or rejected the unit: resync cleanly
-                        FramesDropped++; java.Call("flush"); LostSync(); break;
+                    if (r == -1) {                      // no free input buffer yet (just started, or briefly saturated): try again next frame
+                        if (++retryPumps > 6) { retryPumps = 0; FramesDropped++; java.Call("flush"); LostSync(); }   // ~100 ms stuck: resync
+                        else retry = f;
+                        break;
                     }
+                    retryPumps = 0;
+                    if (r < 0) { FramesDropped++; java.Call("flush"); LostSync(); break; }   // rejected (too large / codec error)
                 }
                 if (!started || !java.Call<bool>("poll")) return false;
                 bool ok = Upload();

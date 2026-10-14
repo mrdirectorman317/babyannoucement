@@ -71,7 +71,9 @@ public final class SpatialMacDecoder {
     public int queue(byte[] data, int length, long ptsUs, boolean keyFrame) {
         if (codec == null) return -2;
         try {
-            int index = codec.dequeueInputBuffer(0);
+            // Right after start() the codec has no free input buffer for a few ms. Wait a little for keyframes (the frame
+            // we cannot afford to lose); never block for delta frames, so a saturated decoder cannot stall rendering.
+            int index = codec.dequeueInputBuffer(keyFrame ? 8000 : 0);
             if (index < 0) return -1;
             ByteBuffer buffer = codec.getInputBuffer(index);
             if (buffer == null || length > buffer.capacity() || length > data.length) {

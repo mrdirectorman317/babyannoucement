@@ -69,6 +69,21 @@ final class VideoEncoderTests: XCTestCase {
         XCTAssertEqual(decoder.size.width, CGFloat(Self.width)); XCTAssertEqual(decoder.size.height, CGFloat(Self.height))
     }
 
+    func testHEVCStreamHasParameterSetsOnKeyframe() throws {
+        let lock = NSLock(); var units = [EncodedUnit]()
+        let encoder: VideoEncoder
+        do { encoder = try VideoEncoder(config: .init(width: Self.width, height: Self.height, fps: 60, bitrate: 3_000_000, codec: .hevc)) { lock.lock(); units.append($0); lock.unlock() } }
+        catch { throw XCTSkip("No HEVC encoder here: \(error)") }
+        for i in 0..<12 { encoder.encode(makeBuffer(phase: i), ptsMicros: Int64(i) * 16_667) }
+        encoder.finish()
+        lock.lock(); let got = units; lock.unlock()
+        let first = try XCTUnwrap(got.first)
+        XCTAssertTrue(first.isKeyframe)
+        XCTAssertTrue(AnnexB.containsParameterSets(first.bitstream, codec: .hevc), "HEVC keyframe must carry VPS/SPS/PPS")
+        XCTAssertTrue(AnnexB.containsKeyframe(first.bitstream, codec: .hevc))
+        XCTAssertFalse(got.dropFirst().first.map { AnnexB.containsKeyframe($0.bitstream, codec: .hevc) } ?? true, "second frame is a delta")
+    }
+
     func testRefinementEmitsAnExtraKeyframe() throws {
         let lock = NSLock(); var units = [EncodedUnit]()
         let encoder: VideoEncoder

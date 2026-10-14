@@ -61,11 +61,12 @@ final class VideoTests: XCTestCase {
         XCTAssertEqual(r.congestion(now: t0), 8_400_000)
         XCTAssertNil(r.congestion(now: t0.addingTimeInterval(0.2)), "rate limited")
         XCTAssertNotNil(r.congestion(now: t0.addingTimeInterval(0.7)))
-        XCTAssertNil(r.tick(now: t0.addingTimeInterval(2)), "no recovery right after congestion")
-        let up = r.tick(now: t0.addingTimeInterval(6)); XCTAssertNotNil(up); XCTAssertGreaterThan(up!, r.minimum)
+        XCTAssertNil(r.tick(now: t0.addingTimeInterval(6)), "no recovery until a long calm stretch")
+        let up = r.tick(now: t0.addingTimeInterval(12)); XCTAssertNotNil(up); XCTAssertGreaterThan(up!, r.minimum)
+        XCTAssertNil(r.tick(now: t0.addingTimeInterval(14)), "and then only gradually")
         for i in 0..<60 { _ = r.congestion(now: t0.addingTimeInterval(10 + Double(i))) }
         XCTAssertEqual(r.current, 3_000_000, "never below minimum")
-        for i in 0..<400 { _ = r.tick(now: t0.addingTimeInterval(100 + Double(i) * 3)) }
+        for i in 0..<400 { _ = r.tick(now: t0.addingTimeInterval(100 + Double(i) * 6)) }
         XCTAssertEqual(r.current, 20_000_000, "never above maximum")
     }
     func testSuggestedBitrate() {

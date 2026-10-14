@@ -60,7 +60,7 @@ struct CaptureHandle {
         config.width=width;config.height=height;config.scalesToFit=true
         let rate=max(5,min(wantVideo ? 60:30,fps))
         config.minimumFrameInterval=CMTime(value:1,timescale:CMTimeScale(rate))
-        config.queueDepth=3
+        config.queueDepth=wantVideo ? 5:3     // video also holds a frame for settle-to-sharp / keyframe-on-request
         config.pixelFormat=wantVideo ? kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:kCVPixelFormatType_32BGRA
         // Video streams hide the Mac cursor: the headset draws its own instantly, so the pointer never lags the video.
         config.showsCursor = !wantVideo;config.capturesAudio=false
@@ -159,7 +159,15 @@ final class EncodedOutput:NSObject,SCStreamOutput,SCStreamDelegate,CaptureOutput
                                ptsMicros:UInt64(max(0,unit.ptsMicros)),flags:flags,codec:self.codec,bitstream:unit.bitstream))
         }
     }
-    func requestKeyframe(){encoder?.requestKeyframe()}
+    /// A viewer needs a clean picture NOW. If the screen is static ScreenCaptureKit will not send another frame,
+    /// so re-encode the last one as a keyframe instead of waiting for something to change.
+    func requestKeyframe() {
+        queue.async { [weak self] in
+            guard let self, self.valid, let encoder = self.encoder else { return }
+            if let px = self.lastPixel { encoder.encodeRefinement(px, ptsMicros: Int64(DispatchTime.now().uptimeNanoseconds/1000)) }
+            else { encoder.requestKeyframe() }
+        }
+    }
     func setBitrate(_ bps:Int){encoder?.setBitrate(bps)}
     func invalidate(){queue.async{self.valid=false;self.encoder?.invalidate();self.encoder=nil}}
     func stream(_ stream:SCStream,didStopWithError error:Error){onError(error.localizedDescription)}
@@ -174,7 +182,6 @@ final class EncodedOutput:NSObject,SCStreamOutput,SCStreamDelegate,CaptureOutput
         lastPixel=pixel;refineWork?.cancel()
         let work=DispatchWorkItem{[weak self] in
             guard let self,self.valid,let px=self.lastPixel else{return}
-            self.lastPixel=nil
             self.encoder?.encodeRefinement(px,ptsMicros:Int64(DispatchTime.now().uptimeNanoseconds/1000))
         }
         refineWork=work;queue.asyncAfter(deadline:.now()+0.25,execute:work)

@@ -21,7 +21,7 @@ namespace SpatialMac {
 
             Text("SpatialMac", 0.044f, GlassPalette.Text, new Vector3(-0.46f, 0.355f, -0.008f));
             var pill = GlassItem.Create(transform, "Connection", new Vector2(0.24f, 0.05f), 0.025f, wasConnected ? GlassPalette.Accent : new Color(0.3f, 0.3f, 0.35f, 0.6f), GlassPalette.Edge, wasConnected ? "Connected" : "Offline", 0.024f, false, GlassUI.QueueChrome);
-            pill.root.transform.localPosition = new Vector3(0.27f, 0.355f, -0.008f); generated.Add(pill.root);
+            pill.root.transform.localPosition = new Vector3(0.25f, 0.355f, -0.008f); generated.Add(pill.root);
             statusText = Text(session.Status, 0.02f, GlassPalette.TextDim, new Vector3(-0.46f, 0.3f, -0.008f));
 
             Text("ENVIRONMENT", 0.016f, GlassPalette.TextDim, new Vector3(-0.46f, 0.245f, -0.008f));

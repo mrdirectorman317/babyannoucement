@@ -122,7 +122,7 @@ namespace SpatialMac {
             lock(frameLock){
                 if(latest.Count>0){uint id=latest.Keys.OrderBy(x=>x<=lastDecoded?1:0).ThenBy(x=>x).First();frame=latest[id];latest.Remove(id);lastDecoded=id;}
             }
-            if(SharingEnabled&&frame!=null&&panels.TryGetValue(frame.StreamID,out SpatialPanel panel)){panel.Apply(frame);Stats.Frame(panel.StreamID,0,-1);}
+            if(SharingEnabled&&frame!=null&&panels.TryGetValue(frame.StreamID,out SpatialPanel panel)){panel.Apply(frame);Stats.Frame(panel.StreamID,panel.JpegBytes,-1);}
             PumpVideo();
         }
         // Hardware-decoded video: once per rendered frame, push the newest decoded picture to each panel. The head-tracked

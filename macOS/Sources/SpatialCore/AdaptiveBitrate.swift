@@ -21,9 +21,10 @@ public struct AdaptiveBitrate: Equatable {
         current = reduced; return current
     }
     @discardableResult public mutating func tick(now: Date = Date()) -> Int? {
-        guard now.timeIntervalSince(lastCongestion) > 4, now.timeIntervalSince(lastIncrease) > 2, current < maximum else { return nil }
+        // Recover cautiously: every overshoot costs the viewer a freeze + keyframe, so wait for a long calm stretch.
+        guard now.timeIntervalSince(lastCongestion) > 10, now.timeIntervalSince(lastIncrease) > 5, current < maximum else { return nil }
         lastIncrease = now
-        current = Swift.min(maximum, Int(Double(current) * 1.12) + 1)
+        current = Swift.min(maximum, Int(Double(current) * 1.08) + 1)
         return current
     }
     /// A sensible starting point: ~0.1 bit per pixel per frame, clamped (about 12 Mbps for 1080p60).

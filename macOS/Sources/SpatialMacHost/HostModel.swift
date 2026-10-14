@@ -176,7 +176,7 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
                     guard sharingEnabled,approved.contains(sourceID),peers["control"]?.id==peer.id else{await capture.stop(streamID);return}
                     var response=Message("subscribed");response.sourceID=sourceID;response.streamID=streamID;response.generation=h.generation
                     response.codec=h.codec
-                    if h.codec != "jpeg",let enc=h.encoded{_ = enc;bitrates[streamID]=AdaptiveBitrate(initial:AdaptiveBitrate.suggested(width:min(2560,m.maxWidth ?? 1280),height:(min(2560,m.maxWidth ?? 1280))*9/16,fps:min(60,m.fps ?? 15)),minimum:2_000_000,maximum:40_000_000)}
+                    if h.codec != "jpeg",let enc=h.encoded{_ = enc;bitrates[streamID]=AdaptiveBitrate(initial:AdaptiveBitrate.suggested(width:min(2560,m.maxWidth ?? 1280),height:(min(2560,m.maxWidth ?? 1280))*9/16,fps:min(60,m.fps ?? 15)),minimum:2_000_000,maximum:Swift.min(40_000_000,AdaptiveBitrate.suggested(width:min(2560,m.maxWidth ?? 1280),height:(min(2560,m.maxWidth ?? 1280))*9/16,fps:min(60,m.fps ?? 15))*3/2))}
                     peer.send(response)
                 }catch{self.error(error.localizedDescription,to:peer)}
             }
