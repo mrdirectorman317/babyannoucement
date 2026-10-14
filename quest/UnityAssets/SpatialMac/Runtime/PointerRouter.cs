@@ -14,12 +14,14 @@ namespace SpatialMac {
                 var z=hits[i].collider.GetComponent<PanelHit>();
                 var b=hits[i].collider.GetComponent<WorkspaceButton>();
                 if(z!=null&&Vector3.Dot(ray.direction,z.panel.transform.forward)>0){best=hits[i].distance;target=z;menuTarget=null;}
-                else if(b!=null&&Vector3.Dot(ray.direction,b.menu.transform.forward)>0){best=hits[i].distance;menuTarget=b;target=null;}
+                else if(b!=null&&Vector3.Dot(ray.direction,b.Front.forward)>0){best=hits[i].distance;menuTarget=b;target=null;}
             }
             laser.SetPosition(1,ray.GetPoint(best));
+            if(target!=null)target.Touch();else if(menuTarget!=null)menuTarget.Touch();
             if(pinching&&!previousPinch) {
                 if(menuTarget!=null)menuTarget.Invoke();
                 else if(target!=null) {
+                    if(target.kind!=HitKind.Desktop)target.Press();
                     if(target.kind==HitKind.Button)session.PanelAction(target.panel,target.action);
                     else if(target.kind==HitKind.Desktop&&target.panel.HasUsablePixels&&target.panel.TryUV(ray,out Vector2 uv)&&session.TryAcquirePointer(pointerID)) {
                         lastUV=Clamp(uv);

@@ -11,6 +11,7 @@ namespace SpatialMac {
                !device.TryGetFeatureValue(CommonUsages.devicePosition,out Vector3 p)||!device.TryGetFeatureValue(CommonUsages.deviceRotation,out Quaternion q)) {router.LostTracking();return;}
             device.TryGetFeatureValue(CommonUsages.secondaryButton,out bool menu);
             if(node==XRNode.RightHand&&menu&&!previousMenu)router.session.SummonMenu();previousMenu=menu;
+            if(node==XRNode.LeftHand){device.TryGetFeatureValue(CommonUsages.primaryButton,out bool crownDown);router.session.crown?.Feed(crownDown);}
             device.TryGetFeatureValue(CommonUsages.triggerButton,out bool down);
             device.TryGetFeatureValue(CommonUsages.primary2DAxis,out Vector2 stick);
             var pose=new Pose(trackingSpace.TransformPoint(p),trackingSpace.rotation*q);

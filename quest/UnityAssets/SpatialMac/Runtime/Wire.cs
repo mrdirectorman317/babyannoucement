@@ -13,9 +13,10 @@ namespace SpatialMac {
     }
     [Serializable] public class Message {
         public string type,token,clientID,role,sourceID,action,text,appID,error,requestID;
+        public string title,body,appName,category,notificationID,confirmID,command,arg;
         public uint streamID,generation; public int fps,maxWidth,button,keyCode;
-        public ulong modifiers; public double u,v,dx,dy;
-        public bool controlEnabled,sharingEnabled,speechEnabled;
+        public ulong modifiers; public double u,v,dx,dy,value;
+        public bool controlEnabled,sharingEnabled,speechEnabled,assistantEnabled,messagesEnabled,replyEnabled,replyable;
         public SourceDTO[] sources;
         public Message(string type){this.type=type;}
     }

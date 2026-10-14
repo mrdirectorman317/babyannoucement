@@ -7,6 +7,7 @@ namespace SpatialMac {
         public Transform frontReference;         // whose +Z points away from the user; defaults to the menu
         public GlassGlow glow;
         float hoverUntil;
+        public bool Hovered => Time.unscaledTime < hoverUntil;
         public Transform Front => frontReference != null ? frontReference : (menu != null ? menu.transform : transform);
         public void Touch() {
             bool was = Time.unscaledTime < hoverUntil;

@@ -7,6 +7,11 @@ import argparse,hashlib,hmac,json,secrets,socket,ssl,struct,subprocess,threading
 from pathlib import Path
 from protocol import Frame,json_packet,pack,read_packet
 
+DEMO_NOTES=[
+    (4,dict(type='notification',notificationID='demo-1',title='Sam',body='Running 5 min late - save me a seat?',appName='Messages',category='message',replyable=True)),
+    (14,dict(type='notification',notificationID='demo-2',title='Calendar',body='Design review starts in 10 minutes',appName='SpatialMac',category='custom',replyable=False)),
+]
+
 def create_config(directory:Path,port:int):
     directory.mkdir(parents=True,exist_ok=True)
     if (directory/'client-config.json').exists():raise ValueError('Refusing to overwrite existing test pairing')
@@ -19,7 +24,8 @@ def create_config(directory:Path,port:int):
     directory.chmod(0o700)
 
 class Mock:
-    def __init__(self,directory:Path,fixture:Path):
+    def __init__(self,directory:Path,fixture:Path,demo:bool=False):
+        self.demo=demo
         self.config=json.loads((directory/'client-config.json').read_text());self.jpeg=fixture.read_bytes()
         self.context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);self.context.minimum_version=ssl.TLSVersion.TLSv1_2
         self.context.load_cert_chain(directory/'cert.pem',directory/'key.pem')
@@ -43,7 +49,9 @@ class Mock:
                 self.roles[role]=peer
                 peer.sendall(json_packet(dict(type='welcome',role=role)))
             if role=='control':
-                self.send(role,dict(type='permissions',sharingEnabled=True,controlEnabled=False,speechEnabled=False))
+                self.send(role,dict(type='permissions',sharingEnabled=True,controlEnabled=False,speechEnabled=False,
+                    assistantEnabled=self.demo,messagesEnabled=self.demo,replyEnabled=self.demo))
+                if self.demo:threading.Thread(target=self.demo_script,daemon=True).start()
                 self.send(role,dict(type='catalog',sources=[self.source]))
             peer.settimeout(None)
             while self.running:
@@ -61,6 +69,14 @@ class Mock:
                 elif t=='unsubscribe':
                     with self.lock:self.subscriptions.pop(int(m.get('streamID',0)),None)
                     self.send(role,dict(type='unsubscribed',streamID=m.get('streamID')))
+                elif self.demo and t=='assistant_ask':
+                    threading.Thread(target=self.demo_assistant,args=(m,),daemon=True).start()
+                elif self.demo and t=='confirm':
+                    ok=m.get('action')=='approve'
+                    self.send(role,dict(type='notification',notificationID='demo-c',title='Demo',body='Approved - a real host would act now.' if ok else 'Denied - nothing happened.',appName='SpatialMac',category='custom',replyable=False))
+                elif self.demo and t=='message_reply':
+                    self.send(role,dict(type='notification',notificationID='demo-r',title='Reply sent (demo)',body=str(m.get('text',''))[:80],appName='Messages',category='custom',replyable=False))
+                elif self.demo and t=='dismiss':pass
                 elif t not in ('release_all',):self.send(role,dict(type='error',error='Read-only fixture server: no input is implemented.'))
         except (OSError,EOFError,ValueError):pass
         finally:
@@ -75,6 +91,22 @@ class Mock:
                         self.roles.clear()
             try:(peer or raw).close()
             except OSError:pass
+    def demo_script(self):
+        start=time.monotonic()
+        for delay,note in DEMO_NOTES:
+            time.sleep(max(0,delay-(time.monotonic()-start)))
+            self.send('control',note)
+    def demo_assistant(self,m):
+        rid=m.get('requestID');text=str(m.get('text','')).lower()
+        self.send('control',dict(type='assistant_state',action='thinking',requestID=rid));time.sleep(1.2)
+        if 'safari' in text or 'open' in text:
+            self.send('control',dict(type='confirm_request',confirmID=str(uuid.uuid4()),title='Confirm action',body='Open Safari on the Mac'))
+            self.send('control',dict(type='assistant_reply',requestID=rid,text='I can open Safari - please approve it in the headset.'))
+        elif 'room' in text or 'passthrough' in text:
+            self.send('control',dict(type='ui_command',command='set_environment',arg='passthrough'))
+            self.send('control',dict(type='assistant_reply',requestID=rid,text='Showing your room.'))
+        else:
+            self.send('control',dict(type='assistant_reply',requestID=rid,text='This is the demo assistant. With a real OpenAI key on the Mac, ChatGPT answers here and can change your workspace.'))
     def frames(self):
         while self.running:
             time.sleep(.2)
@@ -97,9 +129,9 @@ class Mock:
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--directory',type=Path,required=True)
-    p.add_argument('--create-config',action='store_true');p.add_argument('--port',type=int,default=9444)
+    p.add_argument('--create-config',action='store_true');p.add_argument('--demo',action='store_true',help='simulate notifications and the assistant (still no Mac input)');p.add_argument('--port',type=int,default=9444)
     p.add_argument('--fixture',type=Path,default=Path(__file__).resolve().parents[1]/'tests/fixtures/calibration.jpg')
     a=p.parse_args()
     if a.create_config:create_config(a.directory,a.port)
-    Mock(a.directory,a.fixture).run()
+    Mock(a.directory,a.fixture,a.demo).run()
 if __name__=='__main__':main()

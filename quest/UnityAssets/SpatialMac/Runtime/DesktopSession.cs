@@ -15,6 +15,12 @@ namespace SpatialMac {
         public WorkspaceMenu menu;
         public AnchorProvider anchorProvider;
         public PushToTalkMicrophone microphone;
+        // Optional experience services; created automatically in Start() if the scene does not have them.
+        public NotificationFeed notifications;public AssistantPanel assistantPanel;public ImmersionDimmer dimmer;
+        public RecenterCrown crown;public SpeechOutput speechOutput;
+        public bool AssistantEnabled{get;private set;}public bool MessagesEnabled{get;private set;}public bool ReplyEnabled{get;private set;}
+        public string AssistantText="";public bool AssistantThinking;public bool TranscriptFresh;
+        public Message PendingConfirm;public string ReplyTargetID="",ReplyTargetName="";
         public string Status="Not connected.";
         public string Transcript="";
         public bool ControlEnabled {get;private set;}
@@ -39,12 +45,22 @@ namespace SpatialMac {
         readonly string sessionID=Guid.NewGuid().ToString();
         public string SessionID=>sessionID;
         void Start() {
+            EnsureServices();
             try {
                 string path=Path.Combine(Application.persistentDataPath,"client-config.json");
                 config=JsonUtility.FromJson<ClientConfig>(File.ReadAllText(path));config.Validate();
                 if(config.autoConnect)Connect();
             }catch(Exception e){Status="Pairing config missing/invalid: "+e.Message;}
             if(menu!=null)SummonMenu();
+        }
+        void EnsureServices() {
+            if(GetComponent<SpatialAudio>()==null)gameObject.AddComponent<SpatialAudio>();
+            if(notifications==null)notifications=gameObject.AddComponent<NotificationFeed>();
+            if(assistantPanel==null)assistantPanel=gameObject.AddComponent<AssistantPanel>();
+            if(dimmer==null)dimmer=gameObject.AddComponent<ImmersionDimmer>();
+            if(crown==null)crown=gameObject.AddComponent<RecenterCrown>();
+            if(speechOutput==null)speechOutput=gameObject.AddComponent<SpeechOutput>();
+            notifications.session=this;assistantPanel.session=this;dimmer.session=this;crown.session=this;
         }
         public void Connect() {
             if(connecting||Connected||config==null)return;
@@ -98,6 +114,7 @@ namespace SpatialMac {
                     break;
                 case "permissions":
                     ControlEnabled=m.controlEnabled;SharingEnabled=m.sharingEnabled;SpeechEnabled=m.speechEnabled;
+                    AssistantEnabled=m.assistantEnabled;MessagesEnabled=m.messagesEnabled;ReplyEnabled=m.replyEnabled;
                     if(!ControlEnabled)ReleaseAll();
                     if(!SharingEnabled)foreach(var shown in panels.Values)shown.ClearPixels();
                     break;
@@ -107,8 +124,13 @@ namespace SpatialMac {
                     if(pending==m.streamID){pending=0;PumpSubscriptions();}break;
                 case "unsubscribed":RemovePanel(m.streamID);break;
                 case "pong":lastPong=Time.unscaledTime;break;
-                case "transcript":Transcript=m.text??"";Status="Review the transcript before applying it.";menu?.Rebuild();break;
-                case "error":Status=m.error??"Host rejected request.";if(pending!=0){pending=0;PumpSubscriptions();}break;
+                case "transcript":Transcript=m.text??"";TranscriptFresh=!string.IsNullOrWhiteSpace(Transcript);Status="Review the transcript before using it.";menu?.Rebuild();break;
+                case "notification":notifications?.Show(m);break;
+                case "assistant_state":AssistantThinking=m.action=="thinking";break;
+                case "assistant_reply":AssistantThinking=false;AssistantText=m.text??"";TranscriptFresh=false;speechOutput?.Speak(AssistantText);break;
+                case "confirm_request":PendingConfirm=m;if(head!=null)SpatialAudio.Play(Cue.Notify,head.position+head.forward);break;
+                case "ui_command":UICommandRouter.Apply(m,this);break;
+                case "error":Status=m.error??"Host rejected request.";AssistantThinking=false;if(head!=null)SpatialAudio.Play(Cue.Error,head.position+head.forward);if(pending!=0){pending=0;PumpSubscriptions();}break;
             }
         }
         public SpatialPanel OpenPanel(SourceDTO source) {
@@ -133,7 +155,7 @@ namespace SpatialMac {
         }
         public void RefreshPanel(SpatialPanel panel){if(panel==null)return;ReleaseAll();panel.Generation=0;panel.ClearPixels();subscriptions.Enqueue(panel.StreamID);PumpSubscriptions();}
         public void ClosePanel(SpatialPanel panel){if(panel==null)return;control?.Send(new Message("unsubscribe"){streamID=panel.StreamID});RemovePanel(panel.StreamID);SaveLayout();}
-        void RemovePanel(uint id){if(!panels.TryGetValue(id,out SpatialPanel p))return;ReleaseAll();panels.Remove(id);lock(frameLock){latest.Remove(id);allowedFrameIDs.Remove(id);}if(Selected==p)Selected=null;Destroy(p.gameObject);}
+        void RemovePanel(uint id){if(!panels.TryGetValue(id,out SpatialPanel p))return;SpatialAudio.Play(Cue.Close,p.transform.position);ReleaseAll();panels.Remove(id);lock(frameLock){latest.Remove(id);allowedFrameIDs.Remove(id);}if(Selected==p)Selected=null;Destroy(p.gameObject);}
         public bool TryAcquirePointer(int id){if(!Connected||!ControlEnabled||(PointerOwner>=0&&PointerOwner!=id))return false;PointerOwner=id;return true;}
         public void ReleasePointer(int id){if(PointerOwner==id)PointerOwner=-1;}
         public bool SendInput(Message m,SpatialPanel panel) {
@@ -146,6 +168,7 @@ namespace SpatialMac {
             Selected=panel;
             switch(action) {
                 case "follow":panel.SetPlacement(PlacementMode.Follow);break;
+                case "toggle_follow":panel.SetPlacement(panel.Mode==PlacementMode.Follow?PlacementMode.World:PlacementMode.Follow);break;
                 case "world":panel.SetPlacement(PlacementMode.World);break;
                 case "lock":panel.SetPlacement(panel.Locked?PlacementMode.World:PlacementMode.SessionLocked);break;
                 case "remember":RememberPanel(panel);return;
@@ -174,12 +197,32 @@ namespace SpatialMac {
         public void RefreshSources(){control?.Send(new Message("list_sources"));}
         public void ToggleSpeech(){if(microphone==null)return;if(microphone.IsRecording)microphone.StopAndSend();else microphone.Begin();}
         public void SendSpeech(byte[] pcm){if(!SpeechEnabled||audio==null||!audio.Ready){Status="Enable and configure local speech on the Mac first.";return;}audio.SendPCM(pcm);Status="Transcribing locally…";}
+        public void AskAssistant(string text) {
+            if(!AssistantEnabled||control==null||!control.Ready){Status="Add an OpenAI key on the Mac (SpatialMac Host > Integrations) first.";return;}
+            if(string.IsNullOrWhiteSpace(text))return;
+            AssistantText="";AssistantThinking=true;TranscriptFresh=false;
+            control.Send(new Message("assistant_ask"){requestID=Guid.NewGuid().ToString(),text=text});
+        }
+        public void AskAssistantWithTranscript(){AskAssistant(Transcript);}
+        public void DismissAssistant(){AssistantText="";AssistantThinking=false;TranscriptFresh=false;Transcript="";speechOutput?.Stop();}
+        public void Confirm(bool approve){
+            if(PendingConfirm==null)return;
+            control?.Send(new Message("confirm"){confirmID=PendingConfirm.confirmID,action=approve?"approve":"deny"});
+            PendingConfirm=null;
+        }
+        public void BeginReply(string notificationID,string name){ReplyTargetID=notificationID;ReplyTargetName=name;Transcript="";TranscriptFresh=false;}
+        public void SendReply() {
+            if(string.IsNullOrEmpty(ReplyTargetID)||string.IsNullOrWhiteSpace(Transcript)||control==null)return;
+            control.Send(new Message("message_reply"){notificationID=ReplyTargetID,text=Transcript});
+            Status="Reply handed to your Mac.";CancelReply();
+        }
+        public void CancelReply(){ReplyTargetID="";ReplyTargetName="";Transcript="";TranscriptFresh=false;}
         public void ConfirmVoiceCommand(){VoiceIntentRouter.Apply(Transcript,this);}
         public void TypeTranscript(){if(Selected==null)return;SendInput(new Message("text"){streamID=Selected.StreamID,generation=Selected.Generation,text=Transcript},Selected);}
         public void LaunchAllowedApp(string bundleID){if(ControlEnabled)control?.Send(new Message("launch"){appID=bundleID});}
         public void Disconnect(){
             ReleaseAll();control?.Dispose();video?.Dispose();audio?.Dispose();control=video=audio=null;
-            connecting=false;ControlEnabled=SharingEnabled=SpeechEnabled=false;pending=0;subscriptions.Clear();
+            connecting=false;ControlEnabled=SharingEnabled=SpeechEnabled=false;AssistantEnabled=MessagesEnabled=ReplyEnabled=false;AssistantThinking=false;PendingConfirm=null;pending=0;subscriptions.Clear();
             lock(frameLock){networkEpoch++;latest.Clear();
                 while(messages.TryDequeue(out _)){}Interlocked.Exchange(ref queuedMessages,0);
                 while(failures.TryDequeue(out _)){}

@@ -15,6 +15,8 @@ jobs:
         run: python3 -m unittest discover -s tests -v
       - name: TLS integration smoke (Python <-> Python)
         run: python3 tools/integration_smoke.py
+      - name: Integration message flows (demo mock)
+        run: python3 tools/demo_smoke.py
       - name: Shell syntax
         run: for f in scripts/*.sh; do bash -n "$f"; done
       - name: Unity runtime scripts type-check (default symbols)
