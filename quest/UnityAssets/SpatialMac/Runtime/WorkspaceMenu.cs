@@ -53,7 +53,8 @@ namespace SpatialMac {
         }
         void UpdateHint() {
             if (hintText == null) return;
-            string t = string.IsNullOrWhiteSpace(session.Transcript) ? "B button or palm-up summons this window · hold left X to recenter" : "Heard: " + session.Transcript;
+            string t = session.ShowStats ? VideoStreamDecoder.DecoderReport
+                : string.IsNullOrWhiteSpace(session.Transcript) ? "B button or palm-up summons this window · hold left X to recenter" : "Heard: " + session.Transcript;
             hintText.text = GlassUI.Truncate(t, 92);
         }
         void Update() {

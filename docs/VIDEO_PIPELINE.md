@@ -58,6 +58,21 @@ Why HEVC may or may not win on your setup: if the link is USB or strong Wi-Fi, b
 
 Both codecs share the same safeguards: closed GOP (every keyframe decodes on its own), parameter sets in-band on each keyframe, and on the headset the parameter sets are also handed to MediaCodec as a separate codec-config buffer before the first picture (the approach Moonlight's Android client uses) because some decoders are picky about in-band-only config.
 
+## Why not AV1 or H.266 (VVC)? (assessed 2026-10-14; re-check, hardware changes)
+
+A stream needs a **fast encoder on the Mac** *and* a **hardware decoder on the Quest**. HEVC is the only modern codec where both exist today.
+
+| | Mac encode (hardware) | Quest 3S decode (hardware) | Verdict |
+|---|---|---|---|
+| H.264 | yes | yes | Supported (default fallback) |
+| HEVC / H.265 | yes (all Apple Silicon) | very likely yes (detected at runtime) | Supported; preferred |
+| AV1 | **No on any Apple chip I could find** (Apple's AV1 in VideoToolbox is *decode-only*, from M3/A17 Pro on; M4/M5 not confirmed) | Likely yes (Quest 3/3S; Meta's docs only name Quest 2/Pro as lacking it; Virtual Desktop uses AV1 on Quest 3) | Would need a **CPU** encoder (e.g. SVT-AV1) - heat, power, latency; unproven for 1080p60 low-latency screen content on a Mac |
+| H.266 / VVC | **No** (no VideoToolbox support) | No evidence of any | Not viable; software VVC encoders are far too slow for real time |
+
+AV1's real attraction for a *desktop* is its screen-content tools (palette mode, intra block copy), which compress text and flat UI very well - the one place it could clearly beat HEVC. The catch is that the best AV1 streaming setups (e.g. Virtual Desktop on Quest 3) rely on a PC GPU with a hardware AV1 *encoder*; a Mac has no equivalent. If a future Mac adds AV1 hardware encode, it is a small change: reserve codec id 3 in the packet, add an OBU-aware keyframe check (AV1 has no NAL units), add `video/av01` to the decoder, and a fixture. Not done now on purpose: it would be a lot of unverifiable code on the critical path.
+
+What *is* in place: the headset reports what it can decode (`Home > Stats` shows `Hardware decode: H.264 .. HEVC .. AV1 .. VVC ..`), so the first run answers the headset half of this question for real.
+
 ## Latency budget (design estimate - measure it)
 
 | Stage | Estimate |

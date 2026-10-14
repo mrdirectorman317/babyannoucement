@@ -26,6 +26,21 @@ namespace SpatialMac {
         VideoFrame retry; int retryPumps;      // main thread only: a frame the codec had no input buffer for yet
         public long BytesReceived;
 
+        // "Hardware decode: H.264 yes  HEVC yes  AV1 yes  VVC no" - what this headset really reports (shown with Home > Stats).
+        static string decoderReport;
+        public static string DecoderReport {
+            get {
+                if (decoderReport != null) return decoderReport;
+#if UNITY_ANDROID && !UNITY_EDITOR
+                try { using (var c = new AndroidJavaClass("org.spatialmac.SpatialMacDecoder")) decoderReport = c.CallStatic<string>("decoderReport"); }
+                catch (Exception) { decoderReport = "Hardware decode: could not query"; }
+#else
+                decoderReport = "Hardware decode: only reported on the headset build";
+#endif
+                return decoderReport;
+            }
+        }
+
         // Does this headset have a HARDWARE HEVC decoder? (Asked once, cached.) Always false outside the Android build.
         static int hevcState;   // 0 = not asked yet, 1 = yes, -1 = no
         public static bool HevcSupported {

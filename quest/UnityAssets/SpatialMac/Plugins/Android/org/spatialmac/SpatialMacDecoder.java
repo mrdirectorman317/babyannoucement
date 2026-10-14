@@ -43,13 +43,16 @@ public final class SpatialMacDecoder {
      * True if this device has a HARDWARE HEVC decoder. Software HEVC decoding cannot keep up at 60 fps, so the app
      * only asks the Mac for HEVC when this is true (otherwise it asks for H.264).
      */
-    public static boolean supportsHevc() {
+    public static boolean supportsHevc() { return hasHardwareDecoder(MediaFormat.MIMETYPE_VIDEO_HEVC); }
+
+    /** True if a hardware (non-software) decoder exists for the MIME type, e.g. "video/hevc", "video/av01". */
+    public static boolean hasHardwareDecoder(String mime) {
         try {
             android.media.MediaCodecList list = new android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS);
             for (android.media.MediaCodecInfo info : list.getCodecInfos()) {
                 if (info.isEncoder()) continue;
                 for (String type : info.getSupportedTypes()) {
-                    if (!type.equalsIgnoreCase(MediaFormat.MIMETYPE_VIDEO_HEVC)) continue;
+                    if (!type.equalsIgnoreCase(mime)) continue;
                     boolean hardware = Build.VERSION.SDK_INT >= 29
                             ? info.isHardwareAccelerated() && !info.isSoftwareOnly()
                             : !info.getName().startsWith("OMX.google.") && !info.getName().startsWith("c2.android.");
@@ -59,6 +62,15 @@ public final class SpatialMacDecoder {
         } catch (Throwable ignored) { }
         return false;
     }
+
+    /** One line for the Stats readout: which video formats this headset can decode in hardware. */
+    public static String decoderReport() {
+        return "Hardware decode: H.264 " + mark(hasHardwareDecoder(MediaFormat.MIMETYPE_VIDEO_AVC))
+                + "  HEVC " + mark(hasHardwareDecoder(MediaFormat.MIMETYPE_VIDEO_HEVC))
+                + "  AV1 " + mark(hasHardwareDecoder("video/av01"))
+                + "  VVC " + mark(hasHardwareDecoder("video/vvc"));
+    }
+    private static String mark(boolean yes) { return yes ? "yes" : "no"; }
 
     /** Creates and starts the decoder. Returns false (see {@link #error()}) if the device cannot decode this stream. */
     public boolean start(boolean hevc, int initialWidth, int initialHeight) {
