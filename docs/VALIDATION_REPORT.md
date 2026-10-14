@@ -3,7 +3,7 @@
 > **Correction to the earlier version of this report:** it said the Xcode app build "passed". That CI step's exit status was being masked by a shell pipe, and the app bundle was in fact not being checked. A later CI run exposed that the Xcode target's scheme collided with the Swift package's own `SpatialMacHost` scheme; the target is now `SpatialMacApp`, and CI **fails** unless the built app contains `Metadata.appintents` (what Siri/Shortcuts read). That assertion now passes. `swift test` output is likewise no longer masked.
 
 ## Current totals
-Python 20 tests · Swift 39 portable + 4 macOS-only encoder tests (43 on the Mac runner, 0 failures; I saw the H.264, keyframe and refinement tests pass individually, and the HEVC test run without failure but did not see its individual line) · C# math 6 tests · 6 shader stage checks · 4 end-to-end smoke scripts · Android plugin check · C# type-check x2.
+Python 20 tests · Swift 39 portable + 4 macOS-only encoder tests (43 on the Mac runner, 0 failures; the H.264, HEVC, forced-keyframe and settle-to-sharp tests each reported `passed`, none `skipped`) · C# math 6 tests · 6 shader stage checks · 4 end-to-end smoke scripts · Android plugin check · C# type-check x2.
 
 Evidence only; each row says what it does **not** prove. Reproduce with the commands shown.
 
@@ -49,3 +49,12 @@ These were not caught by any test; they came from adversarially reviewing code t
 | Bitrate controller kept probing up to 40 Mbps | A freeze + keyframe every ~20 s on a Wi-Fi link | Recover after 10 s calm, +8% steps, capped at 1.5x the starting rate |
 | Retained frame vs a 3-deep capture pool | Possible dropped captures | Pool depth 5 for video streams |
 | Xcode scheme collided with the package's `SpatialMacHost` scheme; the step's failure was masked | Siri metadata silently missing | Target renamed `SpatialMacApp`; CI asserts `Metadata.appintents` |
+
+## HEVC (H.265) pass
+| Check | Result |
+|---|---|
+| Real HEVC encode -> VideoToolbox HEVC decode round trip, VPS/SPS/PPS on keyframe, delta second frame | **Passed on the macOS runner** (software encoder; hardware path untested) |
+| Mock host serves real HEVC and H.264 clips at ~60 fps; HEVC request falls back to H.264 when only H.264 is offered; ffmpeg decodes every received stream | Passed (`tools/video_smoke.py`, CI) |
+| Codec-config (VPS/SPS/PPS) splitting on the real H.264 and HEVC fixtures; degenerate inputs | Passed (`ParamSetCheck`, CI) |
+| Headset detects a hardware HEVC decoder via `MediaCodecList`; picks HEVC only if present | Compiles; **not run on a Quest** - whether the Quest 3S reports one is exactly what the first run will show |
+| HEVC decoding on a Quest, HEVC vs H.264 latency, real bandwidth savings | **Not tested** |
