@@ -8,6 +8,9 @@
 - Added to the Quest client: glass shaders and UI toolkit, rebuilt `SpatialPanel`, notification toasts, assistant card, home window, dimmer, recenter crown, palm-up menu, spatial sounds, TTS, UI-command router.
 - Added tooling: `quest/typecheck` (C# compile without Unity), `tools/mock_host.py --demo`, `tools/demo_smoke.py`, `tools/make_calibration.py`, `scripts/make-xcodeproj.sh`, `scripts/setup-speech.sh`, GitHub Actions CI.
 
+## Video pass (latest)
+Hardware H.264/HEVC pipeline built end to end (VideoToolbox -> kind-4 packets -> MediaCodec -> YUV shader), plus adaptive bitrate, keyframe recovery, settle-to-sharp, local cursor, ray smoothing, haptics, Stats readout, JPEG fallback. See `docs/VIDEO_PIPELINE.md`. **Not yet run on a headset: the first thing to do is `docs/WHEN_YOU_GET_BACK.md` step 0b (mock H.264 on the Quest), then read `Home > Stats`.**
+
 ## Executed and observed
 See `docs/VALIDATION_REPORT.md` (commands, results, and what they do not prove).
 
