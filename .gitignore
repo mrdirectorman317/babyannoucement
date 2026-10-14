@@ -15,3 +15,7 @@ client-config.json
 *.apk
 *.app/
 macOS/SpatialMac.xcodeproj/
+bin/
+obj/
+TestResults/
+*.log

@@ -9,7 +9,7 @@ JNI_DIR="$(dirname "$(find "${JAVA_HOME:-/usr/lib/jvm}" -name jni.h 2>/dev/null 
 mkdir -p "$OUT"
 RES="$(clang --print-resource-dir)/include"
 clang --target=aarch64-linux-android29 -shared -fPIC -O2 -nostdlib -nostdinc -ffreestanding -fuse-ld=lld \
-  -Wl,-z,max-page-size=16384 -Wl,-soname,libspatialmacnative.so \
+  -Wl,-z,max-page-size=16384 -Wl,--build-id=none -Wl,-soname,libspatialmacnative.so \
   -I"$ROOT/quest/native/shim" -isystem "$RES" -I"$JNI_DIR" -I"$JNI_DIR/linux" \
   "$ROOT/quest/native/spatialmacnative.c" -o "$OUT/libspatialmacnative.so"
 llvm-strip --strip-unneeded "$OUT/libspatialmacnative.so" 2>/dev/null || strip "$OUT/libspatialmacnative.so" || true
