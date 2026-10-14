@@ -142,6 +142,7 @@ final class EncodedOutput:NSObject,SCStreamOutput,SCStreamDelegate,CaptureOutput
     private var encoder:VideoEncoder?
     private var sequence:UInt32=0       // touched only from the encoder's output callback
     private var valid=true
+    private var lastPixel:CVPixelBuffer?,refineWork:DispatchWorkItem?
     private let onError:(String)->Void
     init(streamID:UInt32,generation:UInt32,width:Int,height:Int,fps:Int,bitrate:Int,codec:VideoCodec,
          onVideo:@escaping (VideoFrame)->Void,onError:@escaping (String)->Void) throws {
@@ -169,5 +170,13 @@ final class EncodedOutput:NSObject,SCStreamOutput,SCStreamDelegate,CaptureOutput
               let pixel=buffer.imageBuffer else{return}
         // Same clock as the clock-sync replies, so the headset can compute capture-to-display latency.
         encoder?.encode(pixel,ptsMicros:Int64(DispatchTime.now().uptimeNanoseconds/1000))
+        // Settle to sharp: if nothing changes for 250 ms, re-send the final picture as a keyframe (once per idle period).
+        lastPixel=pixel;refineWork?.cancel()
+        let work=DispatchWorkItem{[weak self] in
+            guard let self,self.valid,let px=self.lastPixel else{return}
+            self.lastPixel=nil
+            self.encoder?.encodeRefinement(px,ptsMicros:Int64(DispatchTime.now().uptimeNanoseconds/1000))
+        }
+        refineWork=work;queue.asyncAfter(deadline:.now()+0.25,execute:work)
     }
 }

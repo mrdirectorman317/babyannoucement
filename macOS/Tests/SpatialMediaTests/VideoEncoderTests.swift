@@ -69,6 +69,21 @@ final class VideoEncoderTests: XCTestCase {
         XCTAssertEqual(decoder.size.width, CGFloat(Self.width)); XCTAssertEqual(decoder.size.height, CGFloat(Self.height))
     }
 
+    func testRefinementEmitsAnExtraKeyframe() throws {
+        let lock = NSLock(); var units = [EncodedUnit]()
+        let encoder: VideoEncoder
+        do { encoder = try VideoEncoder(config: .init(width: Self.width, height: Self.height, fps: 60, bitrate: 3_000_000)) { lock.lock(); units.append($0); lock.unlock() } }
+        catch { throw XCTSkip("No encoder: \(error)") }
+        let still = makeBuffer(phase: 3)
+        for i in 0..<6 { encoder.encode(still, ptsMicros: Int64(i) * 16_667) }
+        encoder.encodeRefinement(still, ptsMicros: 400_000)
+        encoder.finish()
+        lock.lock(); let got = units; lock.unlock()
+        XCTAssertTrue(got.last?.isKeyframe ?? false, "refinement frame must be a keyframe")
+        XCTAssertTrue(got.last?.hasParameterSets ?? false)
+        XCTAssertEqual(got.filter { $0.isKeyframe }.count, 2, "first frame + the refinement")
+    }
+
     func testForcedKeyframeAndBitrateChange() throws {
         let lock = NSLock(); var units = [EncodedUnit]()
         let encoder: VideoEncoder

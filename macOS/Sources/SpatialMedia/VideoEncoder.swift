@@ -103,6 +103,12 @@ public final class VideoEncoder {
         }
         if status != noErr { requestKeyframe() }
     }
+    /// "Settle to sharp": after the screen goes still, re-encode the final picture as a keyframe. Rate control gives
+    /// keyframes a bigger budget than the delta frames used while things were moving, so text crisps up.
+    public func encodeRefinement(_ pixelBuffer: CVPixelBuffer, ptsMicros: Int64) {
+        requestKeyframe()
+        encode(pixelBuffer, ptsMicros: ptsMicros)
+    }
     /// Flush pending frames (call before reading the last output in tests or when stopping).
     public func finish() { if let session { VTCompressionSessionCompleteFrames(session, untilPresentationTimeStamp: .invalid) } }
     public func invalidate() {
