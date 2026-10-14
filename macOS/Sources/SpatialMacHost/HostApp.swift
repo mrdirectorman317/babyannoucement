@@ -45,6 +45,7 @@ struct IntegrationsView:View {
                 }
                 HStack {Text("Model");TextField("gpt-5",text:$model.assistantModel).textFieldStyle(.roundedBorder).frame(width:220)
                     Button("New conversation"){model.newAssistantConversation()}}
+                Toggle("Use OpenAI for speech-to-text (your voice audio leaves this Mac; off = local whisper.cpp)",isOn:Binding(get:{model.cloudSpeech},set:model.setCloudSpeech)).disabled(!model.assistantHasKey)
                 Toggle("Let the assistant read recent messages when I ask",isOn:Binding(get:{model.assistantReadsMessages},set:model.setAssistantReadsMessages)).disabled(!model.messagesEnabled)
                 if model.assistantBusy{ProgressView("Thinking…")}
                 if !model.lastAssistantReply.isEmpty{Text("Last reply: \(model.lastAssistantReply)").font(.caption).textSelection(.enabled)}
@@ -70,7 +71,7 @@ struct HostView:View {
             Text(model.status).font(.callout).textSelection(.enabled)
             Toggle("Share only the sources checked below",isOn:Binding(get:{model.sharingEnabled},set:model.setSharing))
             Toggle("ARM remote mouse / keyboard (off after disconnect)",isOn:Binding(get:{model.controlEnabled},set:model.setControl))
-            Toggle("Allow optional local speech transcription",isOn:Binding(get:{model.speechEnabled},set:model.setSpeech))
+            Toggle("Allow headset voice dictation (speech-to-text)",isOn:Binding(get:{model.speechEnabled},set:model.setSpeech))
             HStack {
                 Text("Explicit capture allowlist").font(.headline)
                 Spacer()

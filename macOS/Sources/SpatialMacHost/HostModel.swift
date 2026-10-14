@@ -20,6 +20,7 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
     @Published private(set) var contactLookup=UserDefaults.standard.bool(forKey:"contactLookup")
     @Published private(set) var assistantReadsMessages=UserDefaults.standard.bool(forKey:"assistantReadsMessages")
     @Published private(set) var replyEnabled=false
+    @Published private(set) var cloudSpeech=UserDefaults.standard.bool(forKey:"cloudSpeech")
     @Published private(set) var messagesStatus="Off."
     @Published private(set) var assistantHasKey=false
     @Published private(set) var assistantBusy=false
@@ -113,7 +114,9 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
             Task {
                 defer{speechBusy=false}
                 do {
-                    let text=try await LocalSpeech(settings:settings).transcribe(packet.payload)
+                    let text:String
+                    if cloudSpeech,let key=KeychainStore.read(AssistantService.keychainAccount){text=try await CloudSpeech(apiKey:key).transcribe(packet.payload)}
+                    else{text=try await LocalSpeech(settings:settings).transcribe(packet.payload)}
                     guard controlID==peers["control"]?.id else{return}
                     var m=Message("transcript");m.text=text;peers["control"]?.send(m)
                 } catch{if let p=peers["control"]{self.error(error.localizedDescription,to:p)}}
@@ -197,6 +200,7 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
         else{watcher.stop();recent.removeAll();setReply(false);messagesStatus="Off."}
         sendPermissions()
     }
+    func setCloudSpeech(_ on:Bool){cloudSpeech=on;UserDefaults.standard.set(on,forKey:"cloudSpeech")}
     func setMessagePreview(_ on:Bool){messagePreview=on;UserDefaults.standard.set(on,forKey:"messagePreview")}
     func setContactLookup(_ on:Bool) {
         contactLookup=on;UserDefaults.standard.set(on,forKey:"contactLookup");watcher.lookUpContacts=on

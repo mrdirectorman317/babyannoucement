@@ -17,12 +17,8 @@ struct LocalSpeech {
         try FileManager.default.createDirectory(at:dir,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])
         defer{try? FileManager.default.removeItem(at:dir)}
         let wav=dir.appendingPathComponent("speech.wav"),output=dir.appendingPathComponent("transcript")
-        var data=Data("RIFF".utf8);data.appendLE(UInt32(36+Int(count)*2));data.append(Data("WAVEfmt ".utf8))
-        data.appendLE(UInt32(16));data.appendLE(UInt16(1));data.appendLE(UInt16(1))
-        data.appendLE(rate);data.appendLE(rate*2);data.appendLE(UInt16(2));data.appendLE(UInt16(16))
-        data.append(Data("data".utf8));data.appendLE(count*2)
-        // Transport PCM samples are little-endian, unlike the network metadata.
-        data.append(pcm.dropFirst(8));try data.write(to:wav,options:.atomic)
+        let data=LocalSpeech.makeWAV(pcm,rate:rate,count:count)
+        try data.write(to:wav,options:.atomic)
         try await withCheckedThrowingContinuation { (continuation:CheckedContinuation<Void,Error>) in
             DispatchQueue.global(qos:.userInitiated).async {
                 let process=Process();process.executableURL=URL(fileURLWithPath:binary)
@@ -40,6 +36,16 @@ struct LocalSpeech {
         }
         let text=try String(contentsOf:output.appendingPathExtension("txt"),encoding:.utf8)
         return String(text.trimmingCharacters(in:.whitespacesAndNewlines).prefix(2000))
+    }
+}
+extension LocalSpeech {
+    /// 16 kHz mono PCM16 WAV from the wire payload (8-byte header + little-endian samples).
+    static func makeWAV(_ pcm:Data,rate:UInt32,count:UInt32) -> Data {
+        var data=Data("RIFF".utf8);data.appendLE(UInt32(36+Int(count)*2));data.append(Data("WAVEfmt ".utf8))
+        data.appendLE(UInt32(16));data.appendLE(UInt16(1));data.appendLE(UInt16(1))
+        data.appendLE(rate);data.appendLE(rate*2);data.appendLE(UInt16(2));data.appendLE(UInt16(16))
+        data.append(Data("data".utf8));data.appendLE(count*2)
+        data.append(pcm.dropFirst(8));return data
     }
 }
 private extension Data {
