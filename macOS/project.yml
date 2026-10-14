@@ -18,6 +18,8 @@ targets:
     dependencies:
       - package: SpatialMac
         product: SpatialCore
+      - package: SpatialMac
+        product: SpatialMedia
     settings:
       base:
         PRODUCT_NAME: SpatialMacHost

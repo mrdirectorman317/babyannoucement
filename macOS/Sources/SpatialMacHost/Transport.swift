@@ -29,8 +29,11 @@ final class SecurePeer {
     private let onClose: (SecurePeer)->Void
     private var closed=false, authenticated=false, sending=false
     private var controls=[Data]()
-    private var video=[UInt32:Data]()
+    private var video=[UInt32:[Data]]()   // per stream: JPEG keeps only the newest; encoded video keeps a short ordered queue
     private var videoOrder=[UInt32]()
+    private var awaitingKeyframe=Set<UInt32>()
+    /// Called (on the network queue) when a stream's queue overflowed and frames were dropped: ask for an IDR.
+    var onCongestion:((UInt32)->Void)?
     private var rateWindow=Date(), rateCount=0
     init(_ c:NWConnection, queue:DispatchQueue,
          onPacket:@escaping (SecurePeer,Packet)->Void, onClose:@escaping (SecurePeer)->Void) {
@@ -71,23 +74,56 @@ final class SecurePeer {
             let bytes=try Wire.encode(Packet(kind:.jpeg,payload:frame.payload()))
             queue.async {
                 guard !self.closed else{return}
-                if self.video[frame.streamID] == nil {
-                    guard self.video.count<3 else{return}
-                    self.videoOrder.append(frame.streamID)
-                }
-                self.video[frame.streamID]=bytes;self.drain()
+                self.enqueueVideo(frame.streamID,bytes,replacing:true)
             }
         } catch { /* Oversized/invalid frames are dropped, not sent. */ }
     }
+    /// Encoded video depends on earlier frames, so we cannot drop just any frame. Policy:
+    ///  - a keyframe supersedes everything queued for that stream (older frames are useless once it plays);
+    ///  - if the queue backs up (slow link), drop the whole queue, ignore delta frames until the next keyframe,
+    ///    and tell the host to send one (and lower the bitrate). The viewer sees a brief freeze, never a smear.
+    func sendVideo(_ frame:VideoFrame) {
+        do {
+            let bytes=try Wire.encode(Packet(kind:.video,payload:frame.payload()))
+            let key=frame.isKeyframe,id=frame.streamID
+            queue.async {
+                guard !self.closed else{return}
+                if key {
+                    self.awaitingKeyframe.remove(id);self.video[id]=nil;self.videoOrder.removeAll{$0==id}
+                    self.enqueueVideo(id,bytes,replacing:false);return
+                }
+                if self.awaitingKeyframe.contains(id){return}
+                if (self.video[id]?.count ?? 0)>=4 {
+                    self.video[id]=nil;self.videoOrder.removeAll{$0==id};self.awaitingKeyframe.insert(id)
+                    self.onCongestion?(id);return
+                }
+                self.enqueueVideo(id,bytes,replacing:false)
+            }
+        } catch { /* invalid frames are dropped */ }
+    }
+    private func enqueueVideo(_ stream:UInt32,_ bytes:Data,replacing:Bool) {
+        if video[stream] == nil {
+            guard video.count<3 else{return}
+            video[stream]=[]
+        }
+        if replacing{video[stream]=[bytes]}else{video[stream]?.append(bytes)}
+        if !videoOrder.contains(stream){videoOrder.append(stream)}
+        drain()
+    }
+    private func nextPacket() -> Data? {
+        if !controls.isEmpty{return controls.removeFirst()}
+        while let key=videoOrder.first {
+            videoOrder.removeFirst()
+            guard var q=video[key],!q.isEmpty else{video[key]=nil;continue}
+            let packet=q.removeFirst()
+            if q.isEmpty{video[key]=nil}else{video[key]=q;videoOrder.append(key)}
+            return packet
+        }
+        return nil
+    }
     private func drain() {
         guard !closed && !sending else{return}
-        let next:Data
-        if !controls.isEmpty {next=controls.removeFirst()}
-        else if !videoOrder.isEmpty {
-            let key=videoOrder.removeFirst()
-            guard let frame=video.removeValue(forKey:key) else{return}
-            next=frame
-        } else{return}
+        guard let next=nextPacket() else{return}
         sending=true
         connection.send(content:next,completion:.contentProcessed({ [weak self] error in
             guard let self else{return};self.sending=false
@@ -117,7 +153,7 @@ final class SecurePeer {
             do {
                 let (kind,count)=try Wire.decodeHeader(header)
                 // Mac is a capture server, never a JPEG receiver.
-                guard kind != .jpeg else{self.closeOnQueue();return}
+                guard kind != .jpeg && kind != .video else{self.closeOnQueue();return}
                 guard kind != .json || count<=16_384 else{self.closeOnQueue();return}
                 self.readExact(count) { payload in
                     if Date().timeIntervalSince(self.rateWindow)>=1 {self.rateWindow=Date();self.rateCount=0}

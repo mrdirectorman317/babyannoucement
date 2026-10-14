@@ -6,8 +6,11 @@ var targets: [Target] = [
     .testTarget(name: "SpatialCoreTests", dependencies: ["SpatialCore"])
 ]
 #if os(macOS)
+products.append(.library(name: "SpatialMedia", targets: ["SpatialMedia"]))
 products.append(.executable(name: "SpatialMacHost", targets: ["SpatialMacHost"]))
-targets.append(.executableTarget(name: "SpatialMacHost", dependencies: ["SpatialCore"]))
+targets.append(.target(name: "SpatialMedia", dependencies: ["SpatialCore"]))
+targets.append(.executableTarget(name: "SpatialMacHost", dependencies: ["SpatialCore", "SpatialMedia"]))
+targets.append(.testTarget(name: "SpatialMediaTests", dependencies: ["SpatialMedia", "SpatialCore"]))
 #endif
 let package = Package(
     name: "SpatialMac", platforms: [.macOS(.v14)],

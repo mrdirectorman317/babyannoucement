@@ -44,6 +44,8 @@ public struct Message: Codable {
     public var title: String?, body: String?, appName: String?, category: String?
     public var notificationID: String?, confirmID: String?
     public var command: String?, arg: String?, value: Double?
+    // Video negotiation and clock sync (additive).
+    public var codec: String?, kbps: Int?, t0: Double?, t1: Double?
     public var sources: [SourceDTO]?
     public init(_ type: String) { self.type = type }
 }

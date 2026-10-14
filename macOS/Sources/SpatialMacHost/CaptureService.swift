@@ -4,17 +4,23 @@ import CoreImage
 import CoreMedia
 import ImageIO
 import SpatialCore
+import SpatialMedia
 
 struct CaptureTarget {
     var dto:SourceDTO
     var window:SCWindow?
     var display:SCDisplay?
 }
+protocol CaptureOutput:AnyObject { func invalidate() }
 struct CaptureHandle {
     let stream:SCStream
-    let output:JPEGOutput
+    let output:CaptureOutput
     let source:SourceDTO
     let generation:UInt32
+    let codec:String            // "jpeg", "h264" or "hevc": what is actually being sent
+    var encoded:EncodedOutput? { output as? EncodedOutput }
+    func requestKeyframe(){encoded?.requestKeyframe()}
+    func setBitrate(_ bps:Int){encoded?.setBitrate(bps)}
 }
 @MainActor final class CaptureService {
     private(set) var targets=[String:CaptureTarget]()
@@ -35,8 +41,9 @@ struct CaptureHandle {
         targets=fresh
         return fresh.values.map(\.dto).sorted{($0.kind,$0.app,$0.title)<($1.kind,$1.app,$1.title)}
     }
-    func start(sourceID:String,streamID:UInt32,fps:Int,maxWidth:Int,
-               onFrame:@escaping (JPEGFrame)->Void,onError:@escaping (String)->Void) async throws -> CaptureHandle {
+    func start(sourceID:String,streamID:UInt32,fps:Int,maxWidth:Int,codec:VideoCodec?=nil,bitrate:Int?=nil,
+               onFrame:@escaping (JPEGFrame)->Void,onVideo:@escaping (VideoFrame)->Void={_ in},
+               onError:@escaping (String)->Void) async throws -> CaptureHandle {
         guard let target=targets[sourceID],streamID>0 else{throw CaptureFailure.noSource}
         guard sessions[streamID] != nil || sessions.count<3 else{throw CaptureFailure.tooMany}
         await stop(streamID)
@@ -45,22 +52,40 @@ struct CaptureHandle {
         else if let d=target.display{filter=SCContentFilter(display:d,excludingWindows:[])}
         else{throw CaptureFailure.noSource}
         let b=target.dto.bounds
-        let width=max(320,min(1920,maxWidth))
-        let height=max(1,min(4096,Int((Double(width)*b.height/b.width).rounded())))
+        let wantVideo=codec != nil
+        // Encoded video can carry far more pixels per second than the JPEG debug path.
+        let width=max(320,min(wantVideo ? 2560:1920,maxWidth)) & ~1      // even sizes: required by 4:2:0 codecs
+        let height=max(2,min(4096,Int((Double(width)*b.height/b.width).rounded()))) & ~1
         let config=SCStreamConfiguration()
         config.width=width;config.height=height;config.scalesToFit=true
-        config.minimumFrameInterval=CMTime(value:1,timescale:CMTimeScale(max(5,min(30,fps))))
-        config.queueDepth=3;config.pixelFormat=kCVPixelFormatType_32BGRA
-        config.showsCursor=true;config.capturesAudio=false
+        let rate=max(5,min(wantVideo ? 60:30,fps))
+        config.minimumFrameInterval=CMTime(value:1,timescale:CMTimeScale(rate))
+        config.queueDepth=3
+        config.pixelFormat=wantVideo ? kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:kCVPixelFormatType_32BGRA
+        // Video streams hide the Mac cursor: the headset draws its own instantly, so the pointer never lags the video.
+        config.showsCursor=!wantVideo;config.capturesAudio=false
+        if wantVideo{config.colorMatrix=CGDisplayStream.yCbCrMatrix_ITU_R_709_2;config.colorSpaceName=CGColorSpace.sRGB}
         config.ignoreShadowsSingleWindow=true
         config.backgroundColor=CGColor(red:0,green:0,blue:0,alpha:1)
         config.destinationRect=CGRect(x:0,y:0,width:CGFloat(width),height:CGFloat(height))
         generation &+= 1;if generation==0{generation=1}
-        let output=JPEGOutput(streamID:streamID,generation:generation,onFrame:onFrame,onError:onError)
-        let stream=SCStream(filter:filter,configuration:config,delegate:output)
-        try stream.addStreamOutput(output,type:.screen,sampleHandlerQueue:output.queue)
+        let stream:SCStream,output:CaptureOutput&SCStreamOutput&SCStreamDelegate,usedCodec:String
+        var made:(CaptureOutput&SCStreamOutput&SCStreamDelegate)?
+        if let codec {
+            made=try? EncodedOutput(streamID:streamID,generation:generation,width:width,height:height,fps:rate,
+                                    bitrate:bitrate ?? AdaptiveBitrate.suggested(width:width,height:height,fps:rate),codec:codec,onVideo:onVideo,onError:onError)
+        }
+        if let made{output=made;usedCodec=codec?.name ?? "jpeg"}
+        else{
+            // No hardware/software encoder available (or JPEG requested): fall back to the JPEG debug path.
+            config.pixelFormat=kCVPixelFormatType_32BGRA;config.showsCursor=true
+            output=JPEGOutput(streamID:streamID,generation:generation,onFrame:onFrame,onError:onError);usedCodec="jpeg"
+        }
+        stream=SCStream(filter:filter,configuration:config,delegate:output)
+        let outputQueue=(output as? EncodedOutput)?.queue ?? (output as? JPEGOutput)?.queue ?? DispatchQueue.global(qos:.userInitiated)
+        try stream.addStreamOutput(output,type:.screen,sampleHandlerQueue:outputQueue)
         try await stream.startCapture()
-        let handle=CaptureHandle(stream:stream,output:output,source:target.dto,generation:generation)
+        let handle=CaptureHandle(stream:stream,output:output,source:target.dto,generation:generation,codec:usedCodec)
         sessions[streamID]=handle;return handle
     }
     func stop(_ id:UInt32) async {
@@ -71,7 +96,7 @@ struct CaptureHandle {
 }
 enum CaptureFailure:Error {case noSource,tooMany}
 
-final class JPEGOutput:NSObject,SCStreamOutput,SCStreamDelegate {
+final class JPEGOutput:NSObject,SCStreamOutput,SCStreamDelegate,CaptureOutput {
     let queue=DispatchQueue(label:"SpatialMac.jpeg",qos:.userInitiated)
     private let context=CIContext(options:[.cacheIntermediates:false])
     private let colorSpace=CGColorSpace(name:CGColorSpace.sRGB)!
@@ -107,4 +132,42 @@ final class JPEGOutput:NSObject,SCStreamOutput,SCStreamDelegate {
 extension RectDTO {
     init(_ r:CGRect){self.init(x:r.minX,y:r.minY,width:r.width,height:r.height)}
     var cgRect:CGRect{CGRect(x:x,y:y,width:width,height:height)}
+}
+
+/// ScreenCaptureKit -> VideoToolbox. Each captured frame is encoded immediately on a high-priority queue;
+/// the encoder owns the only buffering (frame delay <= 1), so there is no pile-up between capture and the wire.
+final class EncodedOutput:NSObject,SCStreamOutput,SCStreamDelegate,CaptureOutput {
+    let queue=DispatchQueue(label:"SpatialMac.encode",qos:.userInteractive)
+    private let streamID:UInt32,generation:UInt32,width:UInt16,height:UInt16,codec:VideoCodec
+    private var encoder:VideoEncoder?
+    private var sequence:UInt32=0       // touched only from the encoder's output callback
+    private var valid=true
+    private let onError:(String)->Void
+    init(streamID:UInt32,generation:UInt32,width:Int,height:Int,fps:Int,bitrate:Int,codec:VideoCodec,
+         onVideo:@escaping (VideoFrame)->Void,onError:@escaping (String)->Void) throws {
+        self.streamID=streamID;self.generation=generation;self.codec=codec;self.onError=onError
+        self.width=UInt16(clamping:width);self.height=UInt16(clamping:height)
+        super.init()
+        encoder=try VideoEncoder(config:.init(width:width,height:height,fps:fps,bitrate:bitrate,codec:codec)) { [weak self] unit in
+            guard let self else{return}
+            self.sequence &+= 1
+            var flags:UInt8=0
+            if unit.isKeyframe{flags |= VideoFrame.flagKeyframe}
+            if unit.hasParameterSets{flags |= VideoFrame.flagParameterSets}
+            onVideo(VideoFrame(streamID:self.streamID,sequence:self.sequence,width:self.width,height:self.height,generation:self.generation,
+                               ptsMicros:UInt64(max(0,unit.ptsMicros)),flags:flags,codec:self.codec,bitstream:unit.bitstream))
+        }
+    }
+    func requestKeyframe(){encoder?.requestKeyframe()}
+    func setBitrate(_ bps:Int){encoder?.setBitrate(bps)}
+    func invalidate(){queue.async{self.valid=false;self.encoder?.invalidate();self.encoder=nil}}
+    func stream(_ stream:SCStream,didStopWithError error:Error){onError(error.localizedDescription)}
+    func stream(_ stream:SCStream,didOutputSampleBuffer buffer:CMSampleBuffer,of type:SCStreamOutputType) {
+        guard valid,type == .screen,buffer.isValid,
+              let attachments=CMSampleBufferGetSampleAttachmentsArray(buffer,createIfNecessary:false) as? [[SCStreamFrameInfo:Any]],
+              let raw=attachments.first?[.status] as? Int,SCFrameStatus(rawValue:raw) == .complete,
+              let pixel=buffer.imageBuffer else{return}
+        // Same clock as the clock-sync replies, so the headset can compute capture-to-display latency.
+        encoder?.encode(pixel,ptsMicros:Int64(DispatchTime.now().uptimeNanoseconds/1000))
+    }
 }

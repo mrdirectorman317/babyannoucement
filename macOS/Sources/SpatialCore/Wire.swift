@@ -3,7 +3,7 @@ import Foundation
 public enum WireError: Error, Equatable {
     case badMagic, badVersion, badKind, badReserved, tooLarge, truncated, badFrame
 }
-public enum PacketKind: UInt8 { case json = 1, jpeg = 2, pcm = 3 }
+public enum PacketKind: UInt8 { case json = 1, jpeg = 2, pcm = 3, video = 4 }
 public struct Packet {
     public let kind: PacketKind
     public let payload: Data
@@ -14,8 +14,9 @@ public enum Wire {
     public static let maxJSON = 65_536
     public static let maxJPEG = 8_388_608
     public static let maxPCM = 384_008 // 12 seconds, 16 kHz, mono PCM16 + 8-byte header
+    public static let maxVideo = 4_194_304 // one encoded access unit (a 4K keyframe is well under this)
     public static func limit(_ kind: PacketKind) -> Int {
-        switch kind { case .json: return maxJSON; case .jpeg: return maxJPEG; case .pcm: return maxPCM }
+        switch kind { case .json: return maxJSON; case .jpeg: return maxJPEG; case .pcm: return maxPCM; case .video: return maxVideo }
     }
     public static func header(kind: PacketKind, count: Int) throws -> Data {
         guard count >= 0 && count <= limit(kind) else { throw WireError.tooLarge }

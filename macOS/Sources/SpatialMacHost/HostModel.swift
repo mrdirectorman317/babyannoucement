@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SpatialCore
+import SpatialMedia
 
 struct RecentNotification { let id:String,sender:String,body:String,chatGUID:String? }
 
@@ -32,6 +33,7 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
     private var recent=[RecentNotification]()
     private var confirmations=ConfirmationBook()
     private var lastReplyAt=Date.distantPast
+    private var bitrates=[UInt32:AdaptiveBitrate]()
     private let host=SecureHost(),capture=CaptureService(),input=InputRouter()
     private var settings:HostSettings?
     private var peers=[String:SecurePeer]()
@@ -48,6 +50,9 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
                 guard let self else{return}
                 if self.connected && Date().timeIntervalSince(self.lastHeartbeat)>3 {
                     self.setControl(false);self.status="Control paused: heartbeat lost."
+                }
+                for (id,var rate) in self.bitrates {
+                    if let faster=rate.tick(){self.bitrates[id]=rate;self.capture.sessions[id]?.setBitrate(faster)}
                 }
             }
         }
@@ -131,6 +136,7 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
                   activeClientID==nil || activeClientID==id,peers[role]==nil,
                   role=="control" || peers["control"] != nil else{peer.close();return}
             activeClientID=id;peer.role=role;peers[role]=peer;peer.markAuthenticated()
+            if role=="video"{peer.onCongestion={[weak self] stream in Task{@MainActor in self?.congested(stream)}}}
             if role=="control"{connected=true;lastHeartbeat=Date()}
             var welcome=Message("welcome");welcome.role=role;peer.send(welcome)
             if role=="control"{sendPermissions();sendCatalog()}
@@ -139,7 +145,12 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
         guard peers[peer.role]?.id==peer.id else{peer.close();return}
         guard peer.role=="control" else{if m.type != "ping"{peer.close()};return}
         switch m.type {
-        case "ping":lastHeartbeat=Date();var pong=Message("pong");pong.requestID=m.requestID;peer.send(pong)
+        case "ping":
+            lastHeartbeat=Date();var pong=Message("pong");pong.requestID=m.requestID
+            pong.t0=m.t0;pong.t1=Double(DispatchTime.now().uptimeNanoseconds/1000)   // same clock as video timestamps
+            peer.send(pong)
+        case "request_keyframe":
+            if let id=m.streamID{capture.sessions[id]?.requestKeyframe()}
         case "list_sources":sendCatalog()
         case "release_all":input.releaseAll()
         case "subscribe":
@@ -150,8 +161,11 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
                 defer{captureBusy=false}
                 do {
                     _ = try await capture.catalog()
+                    let wanted=m.codec.flatMap(VideoCodec.init(name:))
                     let h=try await capture.start(sourceID:sourceID,streamID:streamID,fps:m.fps ?? 15,maxWidth:m.maxWidth ?? 1280,
+                        codec:wanted,bitrate:m.kbps.map{max(1_000,min(60_000,$0))*1000},
                         onFrame:{[weak video] frame in video?.sendFrame(frame)},
+                        onVideo:{[weak video] frame in video?.sendVideo(frame)},
                         onError:{[weak self] text in Task{@MainActor in
                             guard let self else{return};self.input.releaseAll()
                             await self.capture.stop(streamID)
@@ -160,6 +174,8 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
                         }})
                     guard sharingEnabled,approved.contains(sourceID),peers["control"]?.id==peer.id else{await capture.stop(streamID);return}
                     var response=Message("subscribed");response.sourceID=sourceID;response.streamID=streamID;response.generation=h.generation
+                    response.codec=h.codec
+                    if h.codec != "jpeg",let enc=h.encoded{_ = enc;bitrates[streamID]=AdaptiveBitrate(initial:AdaptiveBitrate.suggested(width:min(2560,m.maxWidth ?? 1280),height:(min(2560,m.maxWidth ?? 1280))*9/16,fps:min(60,m.fps ?? 15)),minimum:2_000_000,maximum:40_000_000)}
                     peer.send(response)
                 }catch{self.error(error.localizedDescription,to:peer)}
             }
@@ -183,6 +199,11 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
         default:error("Unsupported command. No generic shell or arbitrary automation is exposed.",to:peer)
         }
     }
+    /// The headset's link can't keep up: back off the bitrate and send a clean keyframe once the queue is flushed.
+    private func congested(_ stream:UInt32) {
+        if var rate=bitrates[stream],let lower=rate.congestion(){bitrates[stream]=rate;capture.sessions[stream]?.setBitrate(lower)}
+        capture.sessions[stream]?.requestKeyframe()
+    }
     private func closed(_ peer:SecurePeer) {
         guard peers[peer.role]?.id==peer.id else{return}
         peers.removeValue(forKey:peer.role)
@@ -190,7 +211,7 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
             input.releaseAll();controlEnabled=false;connected=false;replyEnabled=false;confirmations.clear()
             let old=Array(peers.values);peers.removeAll();activeClientID=nil
             for p in old{p.close()}
-            Task{await capture.stopAll()};status="Headset disconnected. Input disarmed."
+            bitrates.removeAll();Task{await capture.stopAll()};status="Headset disconnected. Input disarmed."
         }
     }
     // MARK: Messages -> headset
