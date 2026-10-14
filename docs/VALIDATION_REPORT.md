@@ -13,6 +13,7 @@ Evidence only; each row says what it does **not** prove. Reproduce with the comm
 | `swift build -c release --product SpatialMacHost` | CI macOS-15 (Xcode) | Compiles (ScreenCaptureKit, Network, SQLite3, Contacts, AppIntents, ...) | It runs, has the right permissions, or behaves correctly |
 | `xcodegen` + `xcodebuild` full app | CI macOS-15 | Builds `SpatialMacHost.app` | Siri discovers/recognizes the intents; app launches |
 | `dotnet build quest/typecheck` (+ `-p:Android=true`) | Linux + CI | 0 errors against Unity 2021.3 reference assemblies | Runs in Unity; shaders compile; Unity-6-only API; Meta/XR-Hands code (symbol-gated, not compiled) |
+| `python3 tools/check_shaders.py` | Linux + CI | The 3 shaders' HLSL blocks compile (vert+frag) with glslang, Unity macros stubbed | Unity accepts the ShaderLab wrapper; works in your render pipeline; looks right |
 | `bash -n scripts/*.sh` | CI | Syntax OK | Scripts work on a Mac |
 
 CI history on the branch shows the failures that were found and fixed (compile errors listed in `ORIGINAL_HANDOFF_CORRECTIONS.md`).

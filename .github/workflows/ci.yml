@@ -17,6 +17,10 @@ jobs:
         run: python3 tools/integration_smoke.py
       - name: Integration message flows (demo mock)
         run: python3 tools/demo_smoke.py
+      - name: Shader HLSL syntax check (glslang, Unity macros stubbed)
+        run: |
+          sudo apt-get install -y -qq glslang-tools
+          python3 tools/check_shaders.py
       - name: Shell syntax
         run: for f in scripts/*.sh; do bash -n "$f"; done
       - name: Unity runtime scripts type-check (default symbols)
