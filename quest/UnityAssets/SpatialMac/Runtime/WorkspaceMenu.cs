@@ -21,7 +21,7 @@ namespace SpatialMac {
 
             Text("SpatialMac", 0.044f, GlassPalette.Text, new Vector3(-0.46f, 0.355f, -0.008f));
             var pill = GlassItem.Create(transform, "Connection", new Vector2(0.24f, 0.05f), 0.025f, wasConnected ? GlassPalette.Accent : new Color(0.3f, 0.3f, 0.35f, 0.6f), GlassPalette.Edge, wasConnected ? "Connected" : "Offline", 0.024f, false, GlassUI.QueueChrome);
-            pill.root.transform.localPosition = new Vector3(0.36f, 0.355f, -0.008f); generated.Add(pill.root);
+            pill.root.transform.localPosition = new Vector3(0.27f, 0.355f, -0.008f); generated.Add(pill.root);
             statusText = Text(session.Status, 0.02f, GlassPalette.TextDim, new Vector3(-0.46f, 0.3f, -0.008f));
 
             Text("ENVIRONMENT", 0.016f, GlassPalette.TextDim, new Vector3(-0.46f, 0.245f, -0.008f));
@@ -45,7 +45,8 @@ namespace SpatialMac {
             Button("Ask ChatGPT", "ask", null, new Vector3(-0.19f, -0.325f, -0.008f), new Vector2(0.17f, 0.055f), session.AssistantEnabled);
             Button("Restore", "restore", null, new Vector3(0f, -0.325f, -0.008f), new Vector2(0.17f, 0.055f), false);
             Button(wasConnected ? "Disconnect" : "Connect", wasConnected ? "disconnect" : "connect", null, new Vector3(0.19f, -0.325f, -0.008f), new Vector2(0.17f, 0.055f), false);
-            Button("Hide", "hide", null, new Vector3(0.38f, -0.325f, -0.008f), new Vector2(0.17f, 0.055f), false);
+            Button(session.ShowStats ? "Stats on" : "Stats", "stats", null, new Vector3(0.38f, -0.325f, -0.008f), new Vector2(0.17f, 0.055f), session.ShowStats);
+            Button("Hide", "hide", null, new Vector3(0.43f, 0.355f, -0.008f), new Vector2(0.1f, 0.04f), false);
             hintText = Text("", 0.018f, GlassPalette.TextDim, new Vector3(-0.46f, -0.385f, -0.008f));
             UpdateHint();
         }
@@ -91,6 +92,7 @@ namespace SpatialMac {
                 case "ask":
                     if (!string.IsNullOrWhiteSpace(session.Transcript)) session.AskAssistantWithTranscript(); else session.ToggleSpeech();
                     break;
+                case "stats": session.ShowStats = !session.ShowStats; Rebuild(); break;
                 case "hide": gameObject.SetActive(false); break;
             }
         }

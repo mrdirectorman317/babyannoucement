@@ -163,7 +163,8 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
                     _ = try await capture.catalog()
                     let wanted=m.codec.flatMap(VideoCodec.init(name:))
                     let h=try await capture.start(sourceID:sourceID,streamID:streamID,fps:m.fps ?? 15,maxWidth:m.maxWidth ?? 1280,
-                        codec:wanted,bitrate:m.kbps.map{max(1_000,min(60_000,$0))*1000},
+                        codec:wanted,bitrate:(m.kbps ?? 0)>0 ? max(1_000,min(60_000,m.kbps ?? 0))*1000:nil,   // Unity sends 0 for "no preference"
+                        
                         onFrame:{[weak video] frame in video?.sendFrame(frame)},
                         onVideo:{[weak video] frame in video?.sendVideo(frame)},
                         onError:{[weak self] text in Task{@MainActor in

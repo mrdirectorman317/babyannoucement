@@ -24,6 +24,11 @@ namespace SpatialMac {
         public PanelManipulator Manipulator { get; private set; }
         public ComfortFollow Follower { get; private set; }
         public float LastFrameAt { get; private set; } = -100;
+        public string Codec { get; private set; } = "jpeg";           // what the Mac is actually sending: jpeg | h264 | hevc
+        public VideoStreamDecoder Decoder;                           // owned by DesktopSession
+        public int PixelWidth { get; private set; }
+        public int PixelHeight { get; private set; }
+        bool showingVideo; string baseTitle = ""; float nextStats;
 
         const float Pad = 0.028f, Radius = 0.022f;
         static readonly string[] ToolActions = { "toggle_follow", "lock", "remember", "refresh" };
@@ -129,7 +134,8 @@ namespace SpatialMac {
         void RefreshChrome() {
             if (title == null) return;
             string tag = Mode == PlacementMode.Follow ? "  ·  following you" : Mode == PlacementMode.SessionLocked ? "  ·  locked" : Mode == PlacementMode.PersistentLocked ? "  ·  pinned to room" : "";
-            title.text = GlassUI.Truncate(Source.app + (string.IsNullOrEmpty(Source.title) || Source.title == "Untitled" ? "" : " — " + Source.title), 60) + tag;
+            baseTitle = GlassUI.Truncate(Source.app + (string.IsNullOrEmpty(Source.title) || Source.title == "Untitled" ? "" : " — " + Source.title), 60) + tag;
+            title.text = baseTitle;
             SetTool(0, Mode == PlacementMode.Follow ? "Following" : "Follow", Mode == PlacementMode.Follow);
             SetTool(1, Locked ? "Locked" : "Lock", Locked);
             SetTool(2, Mode == PlacementMode.PersistentLocked ? "Pinned" : "Pin to room", Mode == PlacementMode.PersistentLocked);
@@ -146,8 +152,25 @@ namespace SpatialMac {
             if (mode == PlacementMode.Follow) Follower.CaptureOffset();
         }
 
+        public void SetCodec(string codec) { Codec = string.IsNullOrEmpty(codec) ? "jpeg" : codec; if (Codec == "jpeg") UseJpeg(); }
+        void UseJpeg() {
+            if (!showingVideo || material == null) return;
+            showingVideo = false; material.SetFloat("_Mode", 0f); material.mainTexture = texture;
+        }
+        // Newest hardware-decoded frame: the shader converts YUV -> RGB, so no CPU pixel conversion happens here.
+        public void ApplyVideo(VideoStreamDecoder d) {
+            if (d == null || d.YTex == null || material == null) return;
+            if (!showingVideo) { showingVideo = true; material.SetFloat("_Mode", d.Planar ? 2f : 1f); }
+            material.SetTexture("_MainTex", d.YTex); material.SetTexture("_UVTex", d.UVTex); material.SetTexture("_VTex", d.VTex != null ? d.VTex : d.UVTex);
+            material.SetVector("_YUVScale", d.Scale);
+            PixelWidth = d.Width; PixelHeight = d.Height;
+            if (d.Width > 0 && d.Height > 0) { float ratio = (float)d.Width / d.Height; if (Mathf.Abs(Aspect - ratio) > 0.01f) { Aspect = ratio; SetWidth(Width); } }
+            LastFrameAt = Time.unscaledTime;
+        }
         public void Apply(JpegFrame frame) {
             if (frame.Generation != Generation || frame.StreamID != StreamID) return;
+            UseJpeg();
+            PixelWidth = frame.Width; PixelHeight = frame.Height;
             if (!ImageConversion.LoadImage(texture, frame.Jpeg, false)) return;
             if (texture.width != frame.Width || texture.height != frame.Height) { Session.Status = "Decoded dimensions do not match frame metadata."; return; }
             float ratio = (float)frame.Width / frame.Height;
@@ -169,6 +192,7 @@ namespace SpatialMac {
         public bool HasUsablePixels => LastFrameAt > -50 && Generation > 0 && Session != null && Session.Connected && Session.SharingEnabled;
         public void ClearPixels() {
             LastFrameAt = -100;
+            UseJpeg();
             if (texture == null) return;
             texture.Reinitialize(2, 2, TextureFormat.RGB24, false);
             texture.SetPixels(new[] { Color.black, Color.black, Color.black, Color.black }); texture.Apply(false, false);
@@ -191,6 +215,9 @@ namespace SpatialMac {
             bar.SetAlpha(always); close.SetAlpha(always);
             for (int i = 0; i < 4; i++) { tools[i].SetAlpha(reveal * fade); corners[i].SetAlpha(reveal * fade); }
             var tc = GlassPalette.TextDim; tc.a *= Mathf.Lerp(0.55f, 1f, reveal) * fade; title.color = tc;
+            if (Session != null && Session.ShowStats) {
+                if (Time.unscaledTime >= nextStats) { nextStats = Time.unscaledTime + 0.5f; title.text = baseTitle + "\n" + Session.Stats.Line(this); }
+            } else if (title.text != baseTitle) title.text = baseTitle;
             string s = Generation == 0 ? "Starting stream…" : (!HasUsablePixels ? "Waiting for the Mac…" : "");
             if (status.text != s) status.text = s;
             var sc = GlassPalette.TextDim; sc.a *= fade; status.color = sc;

@@ -6,14 +6,15 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 namespace SpatialMac {
-    public enum PacketKind : byte { Json=1, Jpeg=2, Pcm=3 }
+    public enum PacketKind : byte { Json=1, Jpeg=2, Pcm=3, Video=4 }
     [Serializable] public class RectDTO { public double x,y,width,height; }
     [Serializable] public class SourceDTO {
         public string id,kind,title,app; public int pid; public RectDTO bounds;
     }
     [Serializable] public class Message {
         public string type,token,clientID,role,sourceID,action,text,appID,error,requestID;
-        public string title,body,appName,category,notificationID,confirmID,command,arg;
+        public string title,body,appName,category,notificationID,confirmID,command,arg,codec;
+        public int kbps; public double t0,t1;
         public uint streamID,generation; public int fps,maxWidth,button,keyCode;
         public ulong modifiers; public double u,v,dx,dy,value;
         public bool controlEnabled,sharingEnabled,speechEnabled,assistantEnabled,messagesEnabled,replyEnabled,replyable;
@@ -34,6 +35,23 @@ namespace SpatialMac {
         }
     }
     public sealed class Packet { public PacketKind Kind; public byte[] Payload; }
+    public enum VideoCodecId : byte { H264=1, Hevc=2 }
+    // One encoded access unit (Annex-B). 28-byte big-endian prefix, then the bitstream. See docs/PROTOCOL.md.
+    public sealed class VideoFrame {
+        public const int MetadataSize=28;
+        public uint StreamID,Sequence,Generation; public ushort Width,Height; public ulong PtsMicros;
+        public byte Flags; public VideoCodecId Codec; public byte[] Bitstream;
+        public bool IsKeyframe=>(Flags&1)!=0;
+        public static VideoFrame Parse(byte[] b) {
+            if(b==null||b.Length<=MetadataSize||b.Length>Wire.MaxVideo)throw new FormatException("Invalid video packet length.");
+            var f=new VideoFrame{StreamID=Wire.U32(b,0),Sequence=Wire.U32(b,4),Width=Wire.U16(b,8),Height=Wire.U16(b,10),
+                Generation=Wire.U32(b,12),PtsMicros=Wire.U64(b,16),Flags=b[24],Codec=(VideoCodecId)b[25]};
+            bool startCode=(b[28]==0&&b[29]==0&&(b[30]==1||(b[30]==0&&b.Length>31&&b[31]==1)));
+            if(f.StreamID==0||f.Generation==0||f.Width==0||f.Height==0||(f.Flags&~3)!=0||b[26]!=0||b[27]!=0||
+               (f.Codec!=VideoCodecId.H264&&f.Codec!=VideoCodecId.Hevc)||!startCode)throw new FormatException("Invalid video metadata.");
+            f.Bitstream=new byte[b.Length-MetadataSize];Buffer.BlockCopy(b,MetadataSize,f.Bitstream,0,f.Bitstream.Length);return f;
+        }
+    }
     public sealed class JpegFrame {
         public uint StreamID,Sequence,Generation; public ushort Width,Height;
         public ulong CapturedMicros; public byte[] Jpeg;
@@ -47,9 +65,9 @@ namespace SpatialMac {
         }
     }
     public static class Wire {
-        public const int HeaderSize=12,MaxJson=65536,MaxJpeg=8388608,MaxPcm=384008;
+        public const int HeaderSize=12,MaxJson=65536,MaxJpeg=8388608,MaxPcm=384008,MaxVideo=4194304;
         public static int Limit(PacketKind kind) {
-            switch(kind){case PacketKind.Json:return MaxJson;case PacketKind.Jpeg:return MaxJpeg;case PacketKind.Pcm:return MaxPcm;default:throw new FormatException("Unknown packet kind.");}
+            switch(kind){case PacketKind.Json:return MaxJson;case PacketKind.Jpeg:return MaxJpeg;case PacketKind.Pcm:return MaxPcm;case PacketKind.Video:return MaxVideo;default:throw new FormatException("Unknown packet kind.");}
         }
         public static ushort U16(byte[] b,int i)=>(ushort)((b[i]<<8)|b[i+1]);
         public static uint U32(byte[] b,int i)=>((uint)b[i]<<24)|((uint)b[i+1]<<16)|((uint)b[i+2]<<8)|b[i+3];

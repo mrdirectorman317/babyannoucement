@@ -18,6 +18,23 @@ namespace SpatialMac {
         // Optional experience services; created automatically in Start() if the scene does not have them.
         public NotificationFeed notifications;public AssistantPanel assistantPanel;public ImmersionDimmer dimmer;
         public RecenterCrown crown;public SpeechOutput speechOutput;
+        // Video. Hardware H.264 is requested only on the headset build; the Editor (and any decoder failure) uses JPEG.
+        public bool preferVideo=true,preferHevc=false;public int videoWidth=1920;
+        public bool ShowStats;public readonly StreamStats Stats=new StreamStats();
+        readonly ConcurrentDictionary<uint,VideoStreamDecoder> decoders=new ConcurrentDictionary<uint,VideoStreamDecoder>();
+        readonly Dictionary<uint,float> keyframeAsked=new Dictionary<uint,float>();
+        readonly List<SpatialPanel> scratchPanels=new List<SpatialPanel>();
+        double clockOffsetMicros,bestRttMicros=double.MaxValue;bool clockKnown;
+        static double MicrosNow()=>Time.realtimeSinceStartupAsDouble*1e6;
+        public double HostNowMicros=>MicrosNow()+clockOffsetMicros;
+        public bool ClockKnown=>clockKnown;
+        string PreferredCodec(){
+#if UNITY_ANDROID && !UNITY_EDITOR
+            return preferVideo?(preferHevc?"hevc":"h264"):"jpeg";
+#else
+            return "jpeg";
+#endif
+        }
         public bool AssistantEnabled{get;private set;}public bool MessagesEnabled{get;private set;}public bool ReplyEnabled{get;private set;}
         public string AssistantText="";public bool AssistantThinking;public bool TranscriptFresh;
         public Message PendingConfirm;public string ReplyTargetID="",ReplyTargetName="";
@@ -77,6 +94,11 @@ namespace SpatialMac {
                     var f=JpegFrame.Parse(p.Payload);
                     lock(frameLock){if(allowedFrameIDs.Contains(f.StreamID))latest[f.StreamID]=f;}
                 }catch(Exception e){Failure(e.Message);}
+            } else if(p.Kind==PacketKind.Video) {
+                try {
+                    var vf=VideoFrame.Parse(p.Payload);
+                    if(decoders.TryGetValue(vf.StreamID,out VideoStreamDecoder dec))dec.Enqueue(vf);
+                }catch(Exception e){Failure(e.Message);}
             } else if(p.Kind==PacketKind.Json) {
                 try {
                     var m=JsonUtility.FromJson<Message>(Encoding.UTF8.GetString(p.Payload));
@@ -91,7 +113,7 @@ namespace SpatialMac {
             if(failures.TryDequeue(out string failure)){Disconnect();Status=failure;return;}
             int budget=64;
             while(budget-->0&&messages.TryDequeue(out Message m)){Interlocked.Decrement(ref queuedMessages);Handle(m);}
-            if(control!=null&&control.Ready&&Time.unscaledTime>=nextPing){nextPing=Time.unscaledTime+1;control.Send(new Message("ping"){requestID=Guid.NewGuid().ToString()});}
+            if(control!=null&&control.Ready&&Time.unscaledTime>=nextPing){nextPing=Time.unscaledTime+1;control.Send(new Message("ping"){requestID=Guid.NewGuid().ToString(),t0=MicrosNow()});}
             if(Connected&&Time.unscaledTime-lastPong>5){Disconnect();Status="Connection heartbeat expired.";return;}
             if(pending!=0&&Time.unscaledTime-subscribeSentAt>8){pending=0;Status="Capture request timed out; refresh the panel.";PumpSubscriptions();}
             // One JPEG upload per render frame. This is a prototype, NOT the
@@ -100,8 +122,34 @@ namespace SpatialMac {
             lock(frameLock){
                 if(latest.Count>0){uint id=latest.Keys.OrderBy(x=>x<=lastDecoded?1:0).ThenBy(x=>x).First();frame=latest[id];latest.Remove(id);lastDecoded=id;}
             }
-            if(SharingEnabled&&frame!=null&&panels.TryGetValue(frame.StreamID,out SpatialPanel panel))panel.Apply(frame);
+            if(SharingEnabled&&frame!=null&&panels.TryGetValue(frame.StreamID,out SpatialPanel panel)){panel.Apply(frame);Stats.Frame(panel.StreamID,0,-1);}
+            PumpVideo();
         }
+        // Hardware-decoded video: once per rendered frame, push the newest decoded picture to each panel. The head-tracked
+        // scene never waits on this - panels just show the latest frame that is ready.
+        void PumpVideo() {
+            scratchPanels.Clear();scratchPanels.AddRange(panels.Values);
+            foreach(var panel in scratchPanels) {
+                var d=panel.Decoder;if(d==null)continue;
+                if(d.Failed){FallBackToJpeg(panel,d.Error);continue;}
+                if(d.ConsumeKeyframeRequest())AskKeyframe(panel.StreamID);
+                if(SharingEnabled&&d.Pump()){
+                    panel.ApplyVideo(d);
+                    Stats.Frame(panel.StreamID,d.BytesReceived,clockKnown?HostNowMicros-d.LastPtsMicros>0?(HostNowMicros-d.LastPtsMicros)/1000.0:0:-1);
+                }
+            }
+        }
+        void AskKeyframe(uint id) {
+            if(keyframeAsked.TryGetValue(id,out float t)&&Time.unscaledTime-t<0.4f)return;
+            keyframeAsked[id]=Time.unscaledTime;control?.Send(new Message("request_keyframe"){streamID=id});
+        }
+        // No usable hardware decoder (or it crashed): drop to the JPEG debug path for everything instead of showing nothing.
+        void FallBackToJpeg(SpatialPanel panel,string reason) {
+            preferVideo=false;RemoveDecoder(panel.StreamID);panel.Decoder=null;panel.SetCodec("jpeg");
+            Status="Hardware video unavailable ("+GlassUI.Truncate(reason,60)+"). Using the slower JPEG path.";
+            RefreshPanel(panel);
+        }
+        void RemoveDecoder(uint id){if(decoders.TryRemove(id,out VideoStreamDecoder d))d.Dispose();Stats.Remove(id);}
         uint lastDecoded;
         void Handle(Message m) {
             switch(m.type) {
@@ -120,10 +168,23 @@ namespace SpatialMac {
                     break;
                 case "catalog":Sources=m.sources??Array.Empty<SourceDTO>();menu?.Rebuild();break;
                 case "subscribed":
-                    if(panels.TryGetValue(m.streamID,out SpatialPanel p)){p.Generation=m.generation;Status="Streaming "+p.Source.title;}
+                    if(panels.TryGetValue(m.streamID,out SpatialPanel p)){
+                        p.Generation=m.generation;Status="Streaming "+p.Source.title;
+                        RemoveDecoder(m.streamID);p.Decoder=null;p.SetCodec(m.codec);
+                        if(m.codec=="h264"||m.codec=="hevc"){
+                            var d=new VideoStreamDecoder(m.streamID,m.generation);decoders[m.streamID]=d;p.Decoder=d;
+                            AskKeyframe(m.streamID);   // frames can start flowing before this message is handled; make sure we begin on an IDR
+                        }
+                    }
                     if(pending==m.streamID){pending=0;PumpSubscriptions();}break;
                 case "unsubscribed":RemovePanel(m.streamID);break;
-                case "pong":lastPong=Time.unscaledTime;break;
+                case "pong":
+                    lastPong=Time.unscaledTime;
+                    if(m.t0>0&&m.t1>0){   // NTP-style: trust the lowest-round-trip samples for the host/headset clock offset
+                        double now=MicrosNow(),rtt=now-m.t0;
+                        if(rtt>=0&&rtt<=bestRttMicros*1.25+1500){bestRttMicros=Math.Min(bestRttMicros*1.002,rtt);clockOffsetMicros=m.t1+rtt/2-now;clockKnown=true;}
+                    }
+                    break;
                 case "transcript":Transcript=m.text??"";TranscriptFresh=!string.IsNullOrWhiteSpace(Transcript);Status="Review the transcript before using it.";menu?.Rebuild();break;
                 case "notification":notifications?.Show(m);break;
                 case "assistant_state":AssistantThinking=m.action=="thinking";break;
@@ -151,11 +212,12 @@ namespace SpatialMac {
             if(pending!=0||!Connected)return;
             while(subscriptions.Count>0){uint id=subscriptions.Dequeue();if(!panels.TryGetValue(id,out SpatialPanel p))continue;
                 pending=id;subscribeSentAt=Time.unscaledTime;
-                control.Send(new Message("subscribe"){streamID=id,sourceID=p.Source.id,fps=15,maxWidth=1280});break;}
+                string codec=PreferredCodec();bool video=codec!="jpeg";
+                control.Send(new Message("subscribe"){streamID=id,sourceID=p.Source.id,fps=video?60:15,maxWidth=video?videoWidth:1280,codec=codec});break;}
         }
         public void RefreshPanel(SpatialPanel panel){if(panel==null)return;ReleaseAll();panel.Generation=0;panel.ClearPixels();subscriptions.Enqueue(panel.StreamID);PumpSubscriptions();}
         public void ClosePanel(SpatialPanel panel){if(panel==null)return;control?.Send(new Message("unsubscribe"){streamID=panel.StreamID});RemovePanel(panel.StreamID);SaveLayout();}
-        void RemovePanel(uint id){if(!panels.TryGetValue(id,out SpatialPanel p))return;SpatialAudio.Play(Cue.Close,p.transform.position);ReleaseAll();panels.Remove(id);lock(frameLock){latest.Remove(id);allowedFrameIDs.Remove(id);}if(Selected==p)Selected=null;Destroy(p.gameObject);}
+        void RemovePanel(uint id){if(!panels.TryGetValue(id,out SpatialPanel p))return;SpatialAudio.Play(Cue.Close,p.transform.position);RemoveDecoder(id);ReleaseAll();panels.Remove(id);lock(frameLock){latest.Remove(id);allowedFrameIDs.Remove(id);}if(Selected==p)Selected=null;Destroy(p.gameObject);}
         public bool TryAcquirePointer(int id){if(!Connected||!ControlEnabled||(PointerOwner>=0&&PointerOwner!=id))return false;PointerOwner=id;return true;}
         public void ReleasePointer(int id){if(PointerOwner==id)PointerOwner=-1;}
         public bool SendInput(Message m,SpatialPanel panel) {
@@ -228,7 +290,9 @@ namespace SpatialMac {
                 while(failures.TryDequeue(out _)){}
             }
             Sources=Array.Empty<SourceDTO>();
-            foreach(var p in panels.Values){p.ClearPixels();p.Generation=0;p.Manipulator.CancelAll();}
+            foreach(var id in new List<uint>(decoders.Keys))RemoveDecoder(id);
+            clockKnown=false;bestRttMicros=double.MaxValue;
+            foreach(var p in panels.Values){p.Decoder=null;p.ClearPixels();p.Generation=0;p.Manipulator.CancelAll();}
             Status="Disconnected; remote input released.";
         }
         void OnApplicationPause(bool pause){if(pause)Disconnect();else if(!shuttingDown&&config!=null&&config.autoConnect)Connect();}

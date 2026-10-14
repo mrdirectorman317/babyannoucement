@@ -21,6 +21,16 @@ jobs:
         run: |
           sudo apt-get install -y -qq glslang-tools
           python3 tools/check_shaders.py
+      - name: Video path (mock host streams real H.264, ffmpeg decodes it)
+        run: |
+          sudo apt-get install -y -qq ffmpeg
+          python3 tools/video_smoke.py
+      - name: Engine-free Unity math unit tests (One Euro filter)
+        run: dotnet test quest/mathtests
+      - name: Android decoder plugin (compiles vs Android API, JNI binding runs, arm64 helper builds)
+        run: |
+          sudo apt-get install -y -qq clang lld llvm
+          bash scripts/check-android-plugin.sh
       - name: Shell syntax
         run: for f in scripts/*.sh; do bash -n "$f"; done
       - name: Unity runtime scripts type-check (default symbols)

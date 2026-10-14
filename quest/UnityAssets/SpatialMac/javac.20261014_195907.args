@@ -1,0 +1,10 @@
+-source
+8
+-target
+8
+-Xlint:all
+-bootclasspath
+/tmp/claude-0/-home-user-babyannoucement/c1a7ec95-0ece-5b60-818b-4febe265dd13/scratchpad/android/android-all.jar
+-d
+/tmp/claude-0/-home-user-babyannoucement/c1a7ec95-0ece-5b60-818b-4febe265dd13/scratchpad/javaout
+Plugins/Android/org/spatialmac/SpatialMacDecoder.java

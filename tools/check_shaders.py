@@ -16,6 +16,7 @@ STUB='''
 #define UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(x)
 float4x4 unity_MatrixVP;
 float4 UnityObjectToClipPos(float4 v){return mul(unity_MatrixVP,v);}
+float3 GammaToLinearSpace(float3 c){return c*(c*(c*0.305306011+0.682171111)+0.012522878);}
 '''
 def main()->int:
     tool=shutil.which('glslangValidator')

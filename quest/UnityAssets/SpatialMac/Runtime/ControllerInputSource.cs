@@ -4,6 +4,8 @@ namespace SpatialMac {
     public sealed class ControllerInputSource:MonoBehaviour {
         public PointerRouter router;public Transform trackingSpace;public XRNode node=XRNode.RightHand;
         bool previousMenu;
+        void OnEnable(){if(router!=null)router.haptic=Buzz;}
+        void Buzz(float amplitude,float seconds){var d=InputDevices.GetDeviceAtXRNode(node);if(d.isValid)d.SendHapticImpulse(0,amplitude,seconds);}
         void Update() {
             if(router==null||trackingSpace==null)return;
             var device=InputDevices.GetDeviceAtXRNode(node);
