@@ -17,7 +17,7 @@ namespace SpatialMac {
             if (session == null) return;
             wasConnected = session.Connected;
             var plate = GlassItem.Create(transform, "Home glass", new Vector2(W, H), 0.06f, GlassPalette.FillStrong, GlassPalette.Edge, null, 0, false, GlassUI.QueuePlate + 5);
-            plate.root.transform.localPosition = new Vector3(0, 0, 0.006f); generated.Add(plate.root);
+            plate.root.transform.localPosition = new Vector3(0, 0, 0.006f); plate.MakeBlocker(transform); generated.Add(plate.root);
 
             Text("SpatialMac", 0.044f, GlassPalette.Text, new Vector3(-0.46f, 0.355f, -0.008f));
             var pill = GlassItem.Create(transform, "Connection", new Vector2(0.24f, 0.05f), 0.025f, wasConnected ? GlassPalette.Accent : new Color(0.3f, 0.3f, 0.35f, 0.6f), GlassPalette.Edge, wasConnected ? "Connected" : "Offline", 0.024f, false, GlassUI.QueueChrome);

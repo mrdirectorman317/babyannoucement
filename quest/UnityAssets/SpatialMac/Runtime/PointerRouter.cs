@@ -13,8 +13,10 @@ namespace SpatialMac {
                 if(hits[i].distance>=best)continue;
                 var z=hits[i].collider.GetComponent<PanelHit>();
                 var b=hits[i].collider.GetComponent<WorkspaceButton>();
+                var block=hits[i].collider.GetComponent<GlassBlocker>();
                 if(z!=null&&Vector3.Dot(ray.direction,z.panel.transform.forward)>0){best=hits[i].distance;target=z;menuTarget=null;}
                 else if(b!=null&&Vector3.Dot(ray.direction,b.Front.forward)>0){best=hits[i].distance;menuTarget=b;target=null;}
+                else if(block!=null&&block.front!=null&&Vector3.Dot(ray.direction,block.front.forward)>0){best=hits[i].distance;target=null;menuTarget=null;}
             }
             laser.SetPosition(1,ray.GetPoint(best));
             if(target!=null)target.Touch();else if(menuTarget!=null)menuTarget.Touch();

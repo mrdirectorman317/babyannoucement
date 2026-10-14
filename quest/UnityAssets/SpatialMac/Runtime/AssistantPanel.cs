@@ -96,6 +96,7 @@ namespace SpatialMac {
             var fillColor = mode == Mode.Confirm ? new Color(0.14f, 0.10f, 0.06f, 0.82f) : GlassPalette.FillStrong;
             plate = GlassItem.Create(card.transform, "Plate", new Vector2(width, height), 0.05f, fillColor, GlassPalette.Edge, null, 0, false, GlassUI.QueuePlate + 5);
             plate.root.transform.localPosition = new Vector3(0, 0, 0.004f);
+            plate.MakeBlocker(card.transform);
             float left = -width / 2 + 0.04f, top = height / 2 - 0.045f;
             GlassUI.NewText(card.transform, header, 0.032f, GlassPalette.Text, TextAnchor.MiddleLeft, new Vector3(left, top, -0.008f));
             GlassUI.NewText(card.transform, wrapped, 0.026f, GlassPalette.TextDim, TextAnchor.UpperLeft, new Vector3(left, top - 0.05f, -0.008f));

@@ -31,6 +31,9 @@ namespace SpatialMac {
         void OnDestroy() { if (material != null) Destroy(material); }
     }
 
+    // Marks a glass surface that must swallow pointer rays so you can't click a Mac window through a card.
+    public sealed class GlassBlocker : MonoBehaviour { public Transform front; }
+
     // A rounded glass rectangle with optional label and collider. The root is unscaled so text is never distorted.
     public sealed class GlassItem {
         public GameObject root;
@@ -46,6 +49,12 @@ namespace SpatialMac {
             if (plate != null) plate.localScale = new Vector3(size.x, size.y, 1f);
             if (glow != null && glow.material != null) glow.material.SetVector("_Size", new Vector4(size.x, size.y, 0, 0));
             if (collider != null) collider.size = new Vector3(size.x, size.y, 0.03f);
+        }
+        // Make this surface block rays. `front` is the transform whose +Z points away from the viewer.
+        public void MakeBlocker(Transform front) {
+            if (collider == null) collider = root.AddComponent<BoxCollider>();
+            Resize(size);
+            var b = root.AddComponent<GlassBlocker>(); b.front = front;
         }
         public void SetLabelColor(Color c) { labelColor = c; if (label != null) label.color = c; }
         // Fade everything; colliders switch off when nearly invisible so unseen controls cannot be clicked.
