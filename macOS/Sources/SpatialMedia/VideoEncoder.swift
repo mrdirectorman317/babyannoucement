@@ -63,6 +63,8 @@ public final class VideoEncoder {
         self.session = session
         set(kVTCompressionPropertyKey_RealTime, kCFBooleanTrue)
         set(kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse)
+        // Closed GOP: every keyframe must decode on its own (a late joiner or recovery must never need earlier pictures).
+        set(kVTCompressionPropertyKey_AllowOpenGOP, kCFBooleanFalse)
         set(kVTCompressionPropertyKey_ProfileLevel, config.codec == .h264 ? kVTProfileLevel_H264_High_AutoLevel : kVTProfileLevel_HEVC_Main_AutoLevel)
         set(kVTCompressionPropertyKey_ExpectedFrameRate, config.fps as CFNumber)
         set(kVTCompressionPropertyKey_MaxKeyFrameInterval, Int(Double(config.fps) * config.keyframeSeconds) as CFNumber)

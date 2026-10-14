@@ -10,7 +10,7 @@ You need: your Mac, your Quest 3S + USB-C cable, Unity (Unity 6 LTS via Unity Hu
 5. You should see the glass Home window, a calibration panel after you click it, an iMessage-style toast after ~4 s, and the assistant card when you use *Ask ChatGPT* (demo answers).
 
 ## 0b. Isolate the headset video decoder (no Mac needed)
-`python3 tools/mock_host.py --directory /tmp/spatialmac-mock --create-config --h264`, put its `client-config.json` on the headset, `adb reverse tcp:9444 tcp:9444`, open the app and open the test source. Expect a moving pattern at ~60 fps; `Home > Stats` should show `H.264 1280×720 · ~60 fps`. Details: `docs/VIDEO_PIPELINE.md`.
+`python3 tools/mock_host.py --directory /tmp/spatialmac-mock --create-config --h264 --h265`, put its `client-config.json` on the headset, `adb reverse tcp:9444 tcp:9444`, open the app and open the test source. Expect a moving pattern at ~60 fps; `Home > Stats` shows the codec in use (HEVC if your headset has a hardware HEVC decoder, else H.264). Press **Home > Video** to cycle Auto / H.264 / JPEG and compare. Details: `docs/VIDEO_PIPELINE.md`.
 
 ## 1. Mac host
 ```bash

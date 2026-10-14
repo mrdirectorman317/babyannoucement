@@ -18,8 +18,9 @@ javac --release 11 -cp "$JAR" -d "$WORK/classes" "$ROOT/quest/UnityAssets/Spatia
 test -f "$WORK/classes/org/spatialmac/SpatialMacDecoder.class" && echo "OK   decoder compiles against Android API"
 clang -shared -fPIC -O2 -I"$JH/include" -I"$JH/include/linux" "$ROOT/quest/native/spatialmacnative.c" -o "$WORK/libspatialmacnative.so"
 mkdir -p "$WORK/test"
-javac --release 11 -cp "$WORK/classes:$JAR" -d "$WORK/test" "$ROOT/quest/native/test/JniCheck.java" 2>&1 | grep -v 'UnsupportedAppUsage\|JAVA_TOOL_OPTIONS\|warning' || true
+javac --release 11 -cp "$WORK/classes:$JAR" -d "$WORK/test" "$ROOT/quest/native/test/JniCheck.java" "$ROOT/quest/native/test/ParamSetCheck.java" 2>&1 | grep -v 'UnsupportedAppUsage\|JAVA_TOOL_OPTIONS\|warning' || true
 java -Djava.library.path="$WORK" -cp "$WORK/test:$WORK/classes:$JAR" org.spatialmac.JniCheck 2>&1 | grep -v JAVA_TOOL_OPTIONS
+java -cp "$WORK/test:$WORK/classes:$JAR" org.spatialmac.ParamSetCheck "$ROOT/tests/fixtures/motion720p60.h264" "$ROOT/tests/fixtures/motion720p60.h265" 2>&1 | grep -v JAVA_TOOL_OPTIONS
 bash "$ROOT/scripts/build-native.sh" >/dev/null
 SO="$ROOT/quest/UnityAssets/SpatialMac/Plugins/Android/libs/arm64-v8a/libspatialmacnative.so"
 llvm-nm -D "$SO" | grep -q Java_org_spatialmac_SpatialMacDecoder_nativeAddress && echo "OK   arm64 library exports the JNI symbols"

@@ -71,11 +71,15 @@ struct CaptureHandle {
         generation &+= 1;if generation==0{generation=1}
         let stream:SCStream,output:CaptureOutput&SCStreamOutput&SCStreamDelegate,usedCodec:String
         var made:(CaptureOutput&SCStreamOutput&SCStreamDelegate)?
-        if let codec {
-            made=try? EncodedOutput(streamID:streamID,generation:generation,width:width,height:height,fps:rate,
-                                    bitrate:bitrate ?? AdaptiveBitrate.suggested(width:width,height:height,fps:rate),codec:codec,onVideo:onVideo,onError:onError)
+        var chosen="jpeg"
+        // Step down HEVC -> H.264 -> JPEG: the viewer always gets the best thing this Mac can actually encode.
+        for candidate in (codec == .hevc ? [VideoCodec.hevc,.h264]:(codec != nil ? [VideoCodec.h264]:[])) {
+            if let m=try? EncodedOutput(streamID:streamID,generation:generation,width:width,height:height,fps:rate,
+                    bitrate:bitrate ?? AdaptiveBitrate.suggested(width:width,height:height,fps:rate,codec:candidate),codec:candidate,onVideo:onVideo,onError:onError) {
+                made=m;chosen=candidate.name;break
+            }
         }
-        if let made{output=made;usedCodec=codec?.name ?? "jpeg"}
+        if let made{output=made;usedCodec=chosen}
         else{
             // No hardware/software encoder available (or JPEG requested): fall back to the JPEG debug path.
             config.pixelFormat=kCVPixelFormatType_32BGRA;config.showsCursor=true

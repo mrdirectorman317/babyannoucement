@@ -27,8 +27,10 @@ public struct AdaptiveBitrate: Equatable {
         current = Swift.min(maximum, Int(Double(current) * 1.08) + 1)
         return current
     }
-    /// A sensible starting point: ~0.1 bit per pixel per frame, clamped (about 12 Mbps for 1080p60).
-    public static func suggested(width: Int, height: Int, fps: Int) -> Int {
-        Swift.min(40_000_000, Swift.max(3_000_000, Int(Double(width * height * fps) * 0.1)))
+    /// A sensible starting point: ~0.1 bit per pixel per frame for H.264 (about 12 Mbps for 1080p60). HEVC reaches the
+    /// same quality at roughly two thirds of that, which is the point of using it: crisper text for the same bandwidth.
+    public static func suggested(width: Int, height: Int, fps: Int, codec: VideoCodec = .h264) -> Int {
+        let bitsPerPixel = codec == .hevc ? 0.065 : 0.1
+        return Swift.min(40_000_000, Swift.max(2_000_000, Int(Double(width * height * fps) * bitsPerPixel)))
     }
 }

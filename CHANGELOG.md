@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1 - HEVC first-class (2026-10-14)
+- HEVC (H.265) end to end: hardware-decoder detection on the headset, HEVC->H.264->JPEG fallback on both sides, lower starting bitrate, closed GOP, `Home > Video` codec switch, codec-config handoff to MediaCodec, HEVC fixture + mock + tests (incl. a real HEVC encode->decode test on macOS CI).
+
 ## 0.3.0 - video pipeline (2026-10-14)
 - Hardware video: VideoToolbox H.264/HEVC encoder (`SpatialMedia`), packet kind 4, safe per-stream queue with keyframe recovery, adaptive bitrate, keyframe-on-request, clock-synced latency readout.
 - Headset: MediaCodec decoder plugin (Java) + 1.8 KB native helper, YUV->RGB shader, JPEG fallback, per-panel Stats.

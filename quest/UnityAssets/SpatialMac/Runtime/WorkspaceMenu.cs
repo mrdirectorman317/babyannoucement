@@ -31,6 +31,7 @@ namespace SpatialMac {
             Text("MAC WINDOWS", 0.016f, GlassPalette.TextDim, new Vector3(-0.46f, 0.12f, -0.008f));
             Button("Refresh", "sources", null, new Vector3(0.27f, 0.12f, -0.008f), new Vector2(0.15f, 0.04f), false);
             Button("More ›", "next", null, new Vector3(0.43f, 0.12f, -0.008f), new Vector2(0.15f, 0.04f), false);
+            Button(session.VideoLabel, "video", null, new Vector3(0.02f, 0.12f, -0.008f), new Vector2(0.34f, 0.04f), false);
             int begin = page * 5, end = Mathf.Min(begin + 5, session.Sources.Length);
             if (begin >= session.Sources.Length) { page = 0; begin = 0; end = Mathf.Min(5, session.Sources.Length); }
             for (int i = begin; i < end; i++) {
@@ -92,6 +93,7 @@ namespace SpatialMac {
                 case "ask":
                     if (!string.IsNullOrWhiteSpace(session.Transcript)) session.AskAssistantWithTranscript(); else session.ToggleSpeech();
                     break;
+                case "video": session.CycleVideoPreference(); break;
                 case "stats": session.ShowStats = !session.ShowStats; Rebuild(); break;
                 case "hide": gameObject.SetActive(false); break;
             }

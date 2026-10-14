@@ -26,6 +26,22 @@ namespace SpatialMac {
         VideoFrame retry; int retryPumps;      // main thread only: a frame the codec had no input buffer for yet
         public long BytesReceived;
 
+        // Does this headset have a HARDWARE HEVC decoder? (Asked once, cached.) Always false outside the Android build.
+        static int hevcState;   // 0 = not asked yet, 1 = yes, -1 = no
+        public static bool HevcSupported {
+            get {
+#if UNITY_ANDROID && !UNITY_EDITOR
+                if (hevcState == 0) {
+                    try { using (var c = new AndroidJavaClass("org.spatialmac.SpatialMacDecoder")) hevcState = c.CallStatic<bool>("supportsHevc") ? 1 : -1; }
+                    catch (Exception) { hevcState = -1; }
+                }
+#else
+                hevcState = -1;
+#endif
+                return hevcState > 0;
+            }
+        }
+
         // Called on the network thread.
         public void Enqueue(VideoFrame f) {
             if (f.StreamID != StreamID || f.Generation != Generation) return;

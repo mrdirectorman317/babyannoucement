@@ -24,9 +24,12 @@ def create_config(directory:Path,port:int):
     directory.chmod(0o700)
 
 class Mock:
-    def __init__(self,directory:Path,fixture:Path,demo:bool=False,h264:Path|None=None):
+    def __init__(self,directory:Path,fixture:Path,demo:bool=False,h264:Path|None=None,h265:Path|None=None):
         self.demo=demo
-        self.units=split_access_units(h264.read_bytes(),1) if h264 and h264.exists() else []
+        # codec name -> (wire codec id, access units). A codec that was not loaded is not offered; subscribers fall back.
+        self.video={}
+        if h264 and h264.exists():self.video['h264']=(1,split_access_units(h264.read_bytes(),1))
+        if h265 and h265.exists():self.video['hevc']=(2,split_access_units(h265.read_bytes(),2))
         self.config=json.loads((directory/'client-config.json').read_text());self.jpeg=fixture.read_bytes()
         self.context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);self.context.minimum_version=ssl.TLSVersion.TLSv1_2
         self.context.load_cert_chain(directory/'cert.pem',directory/'key.pem')
@@ -69,7 +72,9 @@ class Mock:
                 elif t=='subscribe' and m.get('sourceID')=='display:1' and int(m.get('streamID',0))>0:
                     with self.lock:
                         stream=int(m['streamID']);g=self.subscriptions.get(stream,{'g':0})['g']+1
-                        codec='h264' if m.get('codec')=='h264' and self.units else 'jpeg'
+                        want=m.get('codec')
+                        # Same fallback order as the real host: HEVC -> H.264 -> JPEG
+                        codec=next((c for c in ((want,'h264') if want=='hevc' else (want,)) if c in self.video),'jpeg')
                         self.subscriptions[stream]=dict(g=g,seq=0,codec=codec,idx=0)
                         self.send(role,dict(type='subscribed',streamID=stream,generation=g,codec=codec))
                 elif t=='unsubscribe':
@@ -122,11 +127,12 @@ class Mock:
                 if not peer:continue
                 for stream,sub in list(self.subscriptions.items()):
                     try:
-                        if sub['codec']=='h264':
-                            unit=self.units[sub['idx']%len(self.units)]
-                            key=sub['idx']%len(self.units)==0
+                        if sub['codec'] in self.video:
+                            codec_id,units=self.video[sub['codec']]
+                            unit=units[sub['idx']%len(units)]
+                            key=sub['idx']%len(units)==0
                             flags=(VideoFrame.KEY|VideoFrame.PARAMS) if key else 0
-                            f=VideoFrame(stream,sub['seq'],1280,720,sub['g'],time.monotonic_ns()//1000,flags,1,unit)
+                            f=VideoFrame(stream,sub['seq'],1280,720,sub['g'],time.monotonic_ns()//1000,flags,codec_id,unit)
                             peer.sendall(pack(4,f.payload()));sub['idx']+=1
                         elif tick%12==0:
                             f=Frame(stream,sub['seq'],640,360,sub['g'],time.monotonic_ns()//1000,self.jpeg)
@@ -146,9 +152,11 @@ class Mock:
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--directory',type=Path,required=True)
     p.add_argument('--create-config',action='store_true');p.add_argument('--demo',action='store_true',help='simulate notifications and the assistant (still no Mac input)');p.add_argument('--port',type=int,default=9444)
-    p.add_argument('--h264',type=Path,default=None,nargs='?',const=Path(__file__).resolve().parents[1]/'tests/fixtures/motion720p60.h264',help='stream a real 1280x720@60 H.264 test clip to clients that ask for h264')
+    fx=Path(__file__).resolve().parents[1]/'tests/fixtures'
+    p.add_argument('--h264',type=Path,default=None,nargs='?',const=fx/'motion720p60.h264',help='offer a real 1280x720@60 H.264 test clip to clients that ask for h264')
+    p.add_argument('--h265',type=Path,default=None,nargs='?',const=fx/'motion720p60.h265',help='offer a real 1280x720@60 HEVC test clip to clients that ask for hevc')
     p.add_argument('--fixture',type=Path,default=Path(__file__).resolve().parents[1]/'tests/fixtures/calibration.jpg')
     a=p.parse_args()
     if a.create_config:create_config(a.directory,a.port)
-    Mock(a.directory,a.fixture,a.demo,a.h264).run()
+    Mock(a.directory,a.fixture,a.demo,a.h264,a.h265).run()
 if __name__=='__main__':main()

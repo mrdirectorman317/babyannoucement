@@ -62,7 +62,7 @@ final class VideoEncoderTests: XCTestCase {
             XCTAssertEqual(try VideoFrame.decode(f.payload()), f)
         }
         // Decode with a standard decoder.
-        let decoder = TestDecoder()
+        let decoder = TestDecoder(codec: .h264)
         for u in got { try decoder.feed(u.bitstream) }
         decoder.finish()
         XCTAssertGreaterThanOrEqual(decoder.decodedCount, got.count - 1, "decoder should reconstruct (nearly) every frame")
@@ -82,6 +82,13 @@ final class VideoEncoderTests: XCTestCase {
         XCTAssertTrue(AnnexB.containsParameterSets(first.bitstream, codec: .hevc), "HEVC keyframe must carry VPS/SPS/PPS")
         XCTAssertTrue(AnnexB.containsKeyframe(first.bitstream, codec: .hevc))
         XCTAssertFalse(got.dropFirst().first.map { AnnexB.containsKeyframe($0.bitstream, codec: .hevc) } ?? true, "second frame is a delta")
+        // And a standard HEVC decoder can reconstruct it (skipped if this machine has no HEVC decoder).
+        let decoder = TestDecoder(codec: .hevc)
+        do { for u in got { try decoder.feed(u.bitstream) } }
+        catch TestDecoder.Unsupported.noDecoder(let status) { throw XCTSkip("No HEVC decoder on this machine (status \(status)).") }
+        decoder.finish()
+        XCTAssertGreaterThanOrEqual(decoder.decodedCount, got.count - 1, "HEVC decoder should reconstruct (nearly) every frame")
+        XCTAssertEqual(decoder.size.width, CGFloat(Self.width)); XCTAssertEqual(decoder.size.height, CGFloat(Self.height))
     }
 
     func testRefinementEmitsAnExtraKeyframe() throws {
@@ -117,6 +124,9 @@ final class VideoEncoderTests: XCTestCase {
 }
 
 private final class TestDecoder {
+    enum Unsupported: Error { case noDecoder(OSStatus) }
+    let codec: VideoCodec
+    init(codec: VideoCodec) { self.codec = codec }
     private var session: VTDecompressionSession?
     private var format: CMVideoFormatDescription?
     private(set) var decodedCount = 0
@@ -124,11 +134,14 @@ private final class TestDecoder {
     private let lock = NSLock()
 
     func feed(_ annexB: Data) throws {
-        var sps: Data?, pps: Data?, slices = [Data]()
+        var sets = [Int: Data](), slices = [Data]()
         for nal in AnnexB.nalUnits(annexB) {
-            switch (nal.first ?? 0) & 0x1F { case 7: sps = nal; case 8: pps = nal; case 1, 5: slices.append(nal); default: break }
+            guard let type = AnnexB.nalType(nal, codec: codec) else { continue }
+            if codec == .h264 { if type == 7 || type == 8 { sets[type] = nal } else if type == 1 || type == 5 { slices.append(nal) } }
+            else { if (32...34).contains(type) { sets[type] = nal } else if type < 32 { slices.append(nal) } }
         }
-        if session == nil, let sps, let pps { try makeSession(sps: sps, pps: pps) }
+        let ordered = codec == .h264 ? [sets[7], sets[8]] : [sets[32], sets[33], sets[34]]
+        if session == nil, ordered.allSatisfy({ $0 != nil }) { try makeSession(ordered.compactMap { $0 }) }
         guard let session, let format, !slices.isEmpty else { return }
         var avcc = Data()
         for n in slices { var len = UInt32(n.count).bigEndian; avcc.append(Data(bytes: &len, count: 4)); avcc.append(n) }
@@ -150,19 +163,26 @@ private final class TestDecoder {
     }
     func finish() { if let session { VTDecompressionSessionWaitForAsynchronousFrames(session) } }
 
-    private func makeSession(sps: Data, pps: Data) throws {
+    private func makeSession(_ sets: [Data]) throws {
         var fd: CMVideoFormatDescription?
-        let status = sps.withUnsafeBytes { s in pps.withUnsafeBytes { p -> OSStatus in
-            let pointers = [s.bindMemory(to: UInt8.self).baseAddress!, p.bindMemory(to: UInt8.self).baseAddress!]
-            let sizes = [sps.count, pps.count]
-            return CMVideoFormatDescriptionCreateFromH264ParameterSets(allocator: nil, parameterSetCount: 2, parameterSetPointers: pointers,
-                                                                       parameterSetSizes: sizes, nalUnitHeaderLength: 4, formatDescriptionOut: &fd)
-        } }
-        XCTAssertEqual(status, noErr)
+        func withPointers(_ index: Int, _ pointers: [UnsafePointer<UInt8>], _ body: ([UnsafePointer<UInt8>]) -> OSStatus) -> OSStatus {
+            guard index < sets.count else { return body(pointers) }
+            return sets[index].withUnsafeBytes { raw in withPointers(index + 1, pointers + [raw.bindMemory(to: UInt8.self).baseAddress!], body) }
+        }
+        let sizes = sets.map { $0.count }
+        let status = withPointers(0, []) { pointers in
+            codec == .h264
+                ? CMVideoFormatDescriptionCreateFromH264ParameterSets(allocator: nil, parameterSetCount: pointers.count, parameterSetPointers: pointers,
+                                                                      parameterSetSizes: sizes, nalUnitHeaderLength: 4, formatDescriptionOut: &fd)
+                : CMVideoFormatDescriptionCreateFromHEVCParameterSets(allocator: nil, parameterSetCount: pointers.count, parameterSetPointers: pointers,
+                                                                      parameterSetSizes: sizes, nalUnitHeaderLength: 4, extensions: nil, formatDescriptionOut: &fd)
+        }
+        guard status == noErr, let fd else { throw Unsupported.noDecoder(status) }
         format = fd
         var s: VTDecompressionSession?
-        XCTAssertEqual(VTDecompressionSessionCreate(allocator: nil, formatDescription: fd!, decoderSpecification: nil, imageBufferAttributes: nil,
-                                                    outputCallback: nil, decompressionSessionOut: &s), noErr)
+        let created = VTDecompressionSessionCreate(allocator: nil, formatDescription: fd, decoderSpecification: nil, imageBufferAttributes: nil,
+                                                   outputCallback: nil, decompressionSessionOut: &s)
+        guard created == noErr, let s else { throw Unsupported.noDecoder(created) }
         session = s
     }
 }

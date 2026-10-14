@@ -37,6 +37,27 @@ Key decisions and why:
 - **Haptics and sound** on hover/press so interaction feels solid even before the video catches up.
 - **Hard fallback.** If the headset's decoder or native helper fails, the session says so and drops to the JPEG path rather than showing nothing.
 
+## H.264 vs H.265 (HEVC)
+
+Both are supported end to end; the app picks the best one it can and steps down automatically:
+
+```
+HEVC (only if the headset reports a HARDWARE HEVC decoder)  ->  H.264  ->  JPEG
+```
+The headset asks `MediaCodecList` for a hardware HEVC decoder at startup; the Mac host falls back HEVC -> H.264 -> JPEG if it can't create an encoder; and if a decoder fails at runtime the headset marks that codec broken for the session and re-subscribes one step down. **Home > Video** cycles Auto / H.264 / JPEG so you can A/B them against `Stats`.
+
+| | H.264 (High) | HEVC (Main) |
+|---|---|---|
+| Starting bitrate at 1080p60 | ~12.4 Mbps | ~8.1 Mbps (about 35% less for similar quality - the main win: crisper text on the same link) |
+| Clean fixture test: bytes per delta frame (same pattern) | ~8.3 KB | ~5.8 KB |
+| Encode/decode latency | lowest | usually slightly higher; measure with Stats |
+| Compatibility | everywhere | needs a hardware decoder (detected) |
+| Chroma | 4:2:0 8-bit | 4:2:0 8-bit (Main) |
+
+Why HEVC may or may not win on your setup: if the link is USB or strong Wi-Fi, bandwidth isn't the bottleneck and H.264's slightly lower latency may feel better; on a weaker link HEVC's smaller frames avoid the drop-and-resync hitches. That is a measurement for `Stats`, not a guess to trust.
+
+Both codecs share the same safeguards: closed GOP (every keyframe decodes on its own), parameter sets in-band on each keyframe, and on the headset the parameter sets are also handed to MediaCodec as a separate codec-config buffer before the first picture (the approach Moonlight's Android client uses) because some decoders are picky about in-band-only config.
+
 ## Latency budget (design estimate - measure it)
 
 | Stage | Estimate |
@@ -54,7 +75,9 @@ Key decisions and why:
 
 | Piece | Evidence |
 |---|---|
-| Packet format, Annex-B conversion, keyframe/param-set detection, bitrate controller | Unit tests (Swift, Python golden bytes match) |
+| Packet format, Annex-B conversion, keyframe/param-set detection (H.264 and HEVC), bitrate controller | Unit tests (Swift, Python golden bytes match) |
+| Mock host streams **both** H.264 and HEVC real clips at 60 fps, honors the HEVC -> H.264 fallback; ffmpeg decodes each received stream | `tools/video_smoke.py` |
+| Codec-config splitting (VPS/SPS/PPS before the first picture) against the real H.264 and HEVC fixtures | `scripts/check-android-plugin.sh` (`ParamSetCheck`) |
 | Mock host streams a real 1280x720@60 H.264 clip; cadence, gapless sequence, keyframe-on-request, clock reply; **ffmpeg decodes the received bytes with no errors** | `tools/video_smoke.py` (CI) |
 | VideoToolbox encoder compiles; encode -> Annex-B -> standard VideoToolbox decode round-trip; forced keyframe carries SPS/PPS | `SpatialMediaTests` on a macOS CI runner (see VALIDATION_REPORT for the actual result) |
 | Android decoder compiles against the real Android API; JNI binding resolves and returns correct addresses; arm64 helper builds and exports the right symbols | `scripts/check-android-plugin.sh` (CI) |
@@ -65,10 +88,10 @@ Key decisions and why:
 ## Test it on a headset without a Mac
 
 ```bash
-python3 tools/mock_host.py --directory /tmp/spatialmac-mock --create-config --h264
+python3 tools/mock_host.py --directory /tmp/spatialmac-mock --create-config --h264 --h265
 # put its client-config.json on the headset, `adb reverse tcp:9444 tcp:9444`, open the app, open the calibration source
 ```
-You should see a moving test pattern at 60 fps and `Home > Stats` should read `H.264 1280×720 · ~60 fps`. If it doesn't, that isolates the headset decoder from everything on the Mac.
+You should see a moving test pattern at 60 fps and `Home > Stats` should read `HEVC 1280×720 · ~60 fps` (or `H.264` if your headset reports no hardware HEVC decoder - or press **Home > Video** to force a codec). Test each codec separately; if HEVC fails and H.264 works, you've isolated it. If it doesn't, that isolates the headset decoder from everything on the Mac.
 
 ## Known gaps (the honest list)
 

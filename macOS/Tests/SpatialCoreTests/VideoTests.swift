@@ -71,7 +71,11 @@ final class VideoTests: XCTestCase {
     }
     func testSuggestedBitrate() {
         XCTAssertEqual(AdaptiveBitrate.suggested(width: 1920, height: 1080, fps: 60), 12_441_600)
-        XCTAssertEqual(AdaptiveBitrate.suggested(width: 320, height: 200, fps: 5), 3_000_000)
+        XCTAssertEqual(AdaptiveBitrate.suggested(width: 320, height: 200, fps: 5), 2_000_000)
+        let h264 = AdaptiveBitrate.suggested(width: 1920, height: 1080, fps: 60, codec: .h264)
+        let hevc = AdaptiveBitrate.suggested(width: 1920, height: 1080, fps: 60, codec: .hevc)
+        XCTAssertEqual(hevc, 8_087_040)
+        XCTAssertLessThan(hevc, h264 * 7 / 10, "HEVC should start well below H.264")
     }
 }
 

@@ -19,7 +19,9 @@ namespace SpatialMac {
         public NotificationFeed notifications;public AssistantPanel assistantPanel;public ImmersionDimmer dimmer;
         public RecenterCrown crown;public SpeechOutput speechOutput;
         // Video. Hardware H.264 is requested only on the headset build; the Editor (and any decoder failure) uses JPEG.
-        public bool preferVideo=true,preferHevc=false;public int videoWidth=1920;
+        public enum VideoPreference{Auto,H264,Jpeg}
+        public VideoPreference videoPreference=VideoPreference.Auto;public int videoWidth=1920;
+        bool hevcBroken,h264Broken;       // a codec that failed on this device this session is not asked for again until the user cycles
         public bool ShowStats;public readonly StreamStats Stats=new StreamStats();
         readonly ConcurrentDictionary<uint,VideoStreamDecoder> decoders=new ConcurrentDictionary<uint,VideoStreamDecoder>();
         readonly Dictionary<uint,float> keyframeAsked=new Dictionary<uint,float>();
@@ -28,12 +30,31 @@ namespace SpatialMac {
         static double MicrosNow()=>Time.realtimeSinceStartupAsDouble*1e6;
         public double HostNowMicros=>MicrosNow()+clockOffsetMicros;
         public bool ClockKnown=>clockKnown;
-        string PreferredCodec(){
+        // Best codec first: HEVC (needs a hardware decoder here) -> H.264 -> JPEG. The Mac steps down the same way if it cannot encode.
+        public string PreferredCodec(){
 #if UNITY_ANDROID && !UNITY_EDITOR
-            return preferVideo?(preferHevc?"hevc":"h264"):"jpeg";
+            switch(videoPreference){
+                case VideoPreference.Jpeg:return "jpeg";
+                case VideoPreference.H264:return h264Broken?"jpeg":"h264";
+                default:
+                    if(!hevcBroken&&VideoStreamDecoder.HevcSupported)return "hevc";
+                    return h264Broken?"jpeg":"h264";
+            }
 #else
             return "jpeg";
 #endif
+        }
+        public string VideoLabel{get{
+            string c=PreferredCodec();string name=c=="hevc"?"HEVC":c=="h264"?"H.264":"JPEG";
+            return "Video: "+name+(videoPreference==VideoPreference.Auto?" (auto)":"");
+        }}
+        // Home > Video: Auto -> H.264 -> JPEG -> Auto. Lets you compare codecs live with Stats; also clears "this codec failed".
+        public void CycleVideoPreference(){
+            videoPreference=videoPreference==VideoPreference.Auto?VideoPreference.H264:videoPreference==VideoPreference.H264?VideoPreference.Jpeg:VideoPreference.Auto;
+            hevcBroken=h264Broken=false;
+            scratchPanels.Clear();scratchPanels.AddRange(panels.Values);
+            foreach(var p in scratchPanels)RefreshPanel(p);
+            Status=VideoLabel;menu?.Rebuild();
         }
         public bool AssistantEnabled{get;private set;}public bool MessagesEnabled{get;private set;}public bool ReplyEnabled{get;private set;}
         public string AssistantText="";public bool AssistantThinking;public bool TranscriptFresh;
@@ -143,10 +164,12 @@ namespace SpatialMac {
             if(keyframeAsked.TryGetValue(id,out float t)&&Time.unscaledTime-t<0.4f)return;
             keyframeAsked[id]=Time.unscaledTime;control?.Send(new Message("request_keyframe"){streamID=id});
         }
-        // No usable hardware decoder (or it crashed): drop to the JPEG debug path for everything instead of showing nothing.
+        // A codec failed on this device: step down HEVC -> H.264 -> JPEG instead of showing nothing, and remember it.
         void FallBackToJpeg(SpatialPanel panel,string reason) {
-            preferVideo=false;RemoveDecoder(panel.StreamID);panel.Decoder=null;panel.SetCodec("jpeg");
-            Status="Hardware video unavailable ("+GlassUI.Truncate(reason,60)+"). Using the slower JPEG path.";
+            string failed=panel.Codec;
+            if(failed=="hevc")hevcBroken=true;else h264Broken=true;
+            RemoveDecoder(panel.StreamID);panel.Decoder=null;panel.SetCodec("jpeg");
+            Status=(failed=="hevc"?"HEVC":"H.264")+" decoding failed ("+GlassUI.Truncate(reason,50)+"). Trying "+(PreferredCodec()=="jpeg"?"the slower JPEG path":"H.264")+".";
             RefreshPanel(panel);
         }
         void RemoveDecoder(uint id){if(decoders.TryRemove(id,out VideoStreamDecoder d))d.Dispose();Stats.Remove(id);}
