@@ -31,16 +31,24 @@ jobs:
         run: |
           xcodebuild -version
           swift --version
-      - name: Swift tests (SpatialCore)
-        working-directory: macOS
-        run: swift test
       - name: Build host (ScreenCaptureKit, Network, App Intents code, ...)
         working-directory: macOS
-        run: swift build -c release --product SpatialMacHost
+        run: |
+          set +e
+          swift build -c release --product SpatialMacHost > build.log 2>&1
+          code=$?
+          echo "---- unique compiler errors ----"
+          grep -E "error:" build.log | sed -E 's#^.*/Sources/#Sources/#' | sort -u | head -60
+          tail -3 build.log
+          exit $code
+      - name: Swift tests (SpatialCore)
+        working-directory: macOS
+        run: swift test 2>&1 | tail -15
       - name: Build as a real Xcode app (App Intents metadata for Siri)
         run: |
           brew install xcodegen
           cd macOS && xcodegen generate --spec project.yml
           xcodebuild -project SpatialMac.xcodeproj -scheme SpatialMacHost -configuration Release \
-            -derivedDataPath ../Build/DerivedData CODE_SIGN_IDENTITY=- build | tail -40
+            -derivedDataPath ../Build/DerivedData CODE_SIGN_IDENTITY=- build > ../xcb.log 2>&1 || { grep -E 'error:' ../xcb.log | sed -E 's#^.*/Sources/#Sources/#' | sort -u | head -60; exit 1; }
+          tail -3 ../xcb.log
           ls ../Build/DerivedData/Build/Products/Release/SpatialMacHost.app/Contents/Resources | head

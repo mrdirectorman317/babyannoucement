@@ -8,7 +8,10 @@ struct RecentNotification { let id:String,sender:String,body:String,chatGUID:Str
     static let shared=HostModel()
     @Published var sources=[SourceDTO]()
     @Published var approved=Set<String>()
-    @Published private(set) var running=false,sharingEnabled=false,controlEnabled=false,speechEnabled=false
+    @Published private(set) var running=false
+    @Published private(set) var sharingEnabled=false
+    @Published private(set) var controlEnabled=false
+    @Published private(set) var speechEnabled=false
     @Published private(set) var status="Stopped. Run scripts/setup-mac.sh before starting."
     @Published private(set) var connected=false
     // Integrations. Everything here is opt-in; reply/consequential powers reset when the headset disconnects.
