@@ -3,7 +3,7 @@
 > **Correction to the earlier version of this report:** it said the Xcode app build "passed". That CI step's exit status was being masked by a shell pipe, and the app bundle was in fact not being checked. A later CI run exposed that the Xcode target's scheme collided with the Swift package's own `SpatialMacHost` scheme; the target is now `SpatialMacApp`, and CI **fails** unless the built app contains `Metadata.appintents` (what Siri/Shortcuts read). That assertion now passes. `swift test` output is likewise no longer masked.
 
 ## Current totals
-Python 20 tests · Swift 39 portable + 3 macOS-only encoder tests (42 on the Mac runner) · C# math 6 tests · 6 shader stage checks · 4 end-to-end smoke scripts · Android plugin check · C# type-check x2.
+Python 20 tests · Swift 39 portable + 4 macOS-only encoder tests (43 on the Mac runner, 0 failures; I saw the H.264, keyframe and refinement tests pass individually, and the HEVC test run without failure but did not see its individual line) · C# math 6 tests · 6 shader stage checks · 4 end-to-end smoke scripts · Android plugin check · C# type-check x2.
 
 Evidence only; each row says what it does **not** prove. Reproduce with the commands shown.
 
@@ -38,3 +38,14 @@ python3 tools/integration_smoke.py && python3 tools/demo_smoke.py
 (cd macOS && swift test)          # SpatialCore only on Linux; full host on macOS
 dotnet build quest/typecheck && dotnet build quest/typecheck -p:Android=true
 ```
+
+## Review pass (after the video work): defects found by reading the code, then fixed
+These were not caught by any test; they came from adversarially reviewing code that has never run on a device.
+
+| Defect | Effect if left | Fix |
+|---|---|---|
+| `request_keyframe` on a **static** screen produced nothing (ScreenCaptureKit sends no frames when nothing changes) | Headset joins or recovers and shows no picture until something moves | Host re-encodes the last captured frame as a keyframe on request |
+| Decoder startup: `MediaCodec` has no free input buffer for a few ms after `start()`; code treated that as overload and flushed | Could loop forever without showing a first frame | Wait briefly for keyframes; retry a frame next pump; only resync after ~100 ms stuck |
+| Bitrate controller kept probing up to 40 Mbps | A freeze + keyframe every ~20 s on a Wi-Fi link | Recover after 10 s calm, +8% steps, capped at 1.5x the starting rate |
+| Retained frame vs a 3-deep capture pool | Possible dropped captures | Pool depth 5 for video streams |
+| Xcode scheme collided with the package's `SpatialMacHost` scheme; the step's failure was masked | Siri metadata silently missing | Target renamed `SpatialMacApp`; CI asserts `Metadata.appintents` |
