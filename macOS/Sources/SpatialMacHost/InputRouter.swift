@@ -97,16 +97,16 @@ import SpatialCore
     }
     private func windowBounds(_ id:CGWindowID)->RectDTO? {
         guard let list=CGWindowListCopyWindowInfo(.optionIncludingWindow,id) as? [[String:Any]],
-              let info=list.first,let dict=info[kCGWindowBounds as String] as? CFDictionary,
-              let rect=CGRect(dictionaryRepresentation:dict) else{return nil}
+              let info=list.first,let raw=info[kCGWindowBounds as String],
+              let rect=CGRect(dictionaryRepresentation:raw as! CFDictionary) else{return nil}
         return RectDTO(rect)
     }
     private func pointHitsWindow(_ point:CGPoint,source:SourceDTO)->Bool {
         guard let list=CGWindowListCopyWindowInfo(.optionOnScreenOnly,kCGNullWindowID) as? [[String:Any]] else{return false}
         for item in list {
             guard (item[kCGWindowAlpha as String] as? Double ?? 1)>0.01,
-                  let bounds=item[kCGWindowBounds as String] as? CFDictionary,
-                  let rect=CGRect(dictionaryRepresentation:bounds),rect.contains(point) else{continue}
+                  let bounds=item[kCGWindowBounds as String],
+                  let rect=CGRect(dictionaryRepresentation:bounds as! CFDictionary),rect.contains(point) else{continue}
             guard let id=item[kCGWindowNumber as String] as? UInt32 else{return false}
             return source.id=="window:\(id)"
         }

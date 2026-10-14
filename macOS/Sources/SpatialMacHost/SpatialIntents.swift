@@ -36,7 +36,7 @@ struct SetEnvironmentIntent: AppIntent {
         guard HostModel.shared.sendUICommand("set_environment", arg: environment.rawValue) else {
             return .result(dialog: "The headset isn't connected.")
         }
-        return .result(dialog: environment == .passthrough ? "Showing your room." : "Entering the virtual world.")
+        return .result(dialog: environment == .passthrough ? IntentDialog("Showing your room.") : IntentDialog("Entering the virtual world."))
     }
 }
 
@@ -44,7 +44,7 @@ struct RecenterWorkspaceIntent: AppIntent {
     static let title: LocalizedStringResource = "Recenter Workspace"
     static let description = IntentDescription("Bring your panels back in front of you.")
     @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
-        .result(dialog: HostModel.shared.sendUICommand("recenter") ? "Recentered." : "The headset isn't connected.")
+        .result(dialog: HostModel.shared.sendUICommand("recenter") ? IntentDialog("Recentered.") : IntentDialog("The headset isn't connected."))
     }
 }
 
@@ -54,7 +54,7 @@ struct ShowInHeadsetIntent: AppIntent {
     @Parameter(title: "Title") var heading: String
     @Parameter(title: "Text") var text: String
     @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
-        .result(dialog: HostModel.shared.toast(title: heading, body: text) ? "Sent to your headset." : "The headset isn't connected.")
+        .result(dialog: HostModel.shared.toast(title: heading, body: text) ? IntentDialog("Sent to your headset.") : IntentDialog("The headset isn't connected."))
     }
 }
 

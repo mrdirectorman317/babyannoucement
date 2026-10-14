@@ -15,7 +15,7 @@ import SpatialCore
     private let session: URLSession = {
         let c = URLSessionConfiguration.ephemeral
         c.timeoutIntervalForRequest = 60; c.waitsForConnectivity = false
-        return c
+        return URLSession(configuration: c)
     }()
 
     var hasKey: Bool { KeychainStore.read(Self.keychainAccount) != nil }
