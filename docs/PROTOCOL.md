@@ -107,3 +107,28 @@ All travel as JSON on the **control** lane. Unknown fields are ignored by both e
 | Quest -> Mac | `dismiss` | `notificationID` | No-op today |
 
 `launch` allowlist now: Finder, Safari, TextEdit, Xcode, Messages, Notes, Calendar, Music, ChatGPT (`com.openai.chat`).
+
+
+## Video (packet kind 4) and negotiation (additive)
+
+The client opts in per stream: `subscribe` gains `codec` (`"h264"`, `"hevc"` or `"jpeg"`/empty) and `kbps` (0 = host default, else 1000-60000). `subscribed` returns the codec **actually used** in `codec` (the host falls back to `"jpeg"` if no encoder is available). A client that never sends `codec` gets exactly the old JPEG behavior; kind 4 is never sent to it.
+
+Kind 4 payload = 28-byte big-endian prefix + Annex-B bitstream (one access unit, start codes, SPS/PPS/VPS in-band on keyframes):
+
+| Offset | Size | Meaning |
+|---|---:|---|
+| 0 | 4 | Stream ID (positive) |
+| 4 | 4 | Sequence (gapless while the link is healthy; may jump after the host drops frames, always resuming on a keyframe) |
+| 8 | 2 | Width (px) |
+| 10 | 2 | Height (px) |
+| 12 | 4 | Generation (positive) |
+| 16 | 8 | Capture time, host-monotonic microseconds (same clock as `pong.t1`) |
+| 24 | 1 | Flags: bit0 keyframe, bit1 has parameter sets; other bits must be 0 |
+| 25 | 1 | Codec: 1 H.264, 2 HEVC |
+| 26 | 2 | Reserved, 0 |
+
+Max payload 4,194,304 bytes. Receivers validate the prefix, the start code and the limits before allocating. The host never accepts kind 4 (or 2) from a client.
+
+New control messages: `request_keyframe {streamID}` (client -> host; host forces an IDR on that stream), `ping {t0}` / `pong {t0, t1}` (t0 = client clock micros echoed back; t1 = host-monotonic micros when it answered), used to estimate the clock offset for latency readouts.
+
+Host behavior under load: encoded frames queue per stream (max 4); a keyframe clears older queued frames; overflow drops the whole queue, waits for a keyframe, forces one and lowers the target bitrate.
