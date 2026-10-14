@@ -57,11 +57,14 @@ jobs:
           grep -E "error:" build.log | sed -E 's#^.*/Sources/#Sources/#' | sort -u | head -60
           tail -3 build.log
           exit $code
-      - name: Swift tests (SpatialCore)
+      - name: Swift tests (SpatialCore + SpatialMedia encode/decode on real VideoToolbox)
         working-directory: macOS
-        run: swift test 2>&1 | tail -15
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee test.log | grep -E "Test Case .*(passed|failed|skipped)|Executed [0-9]+ tests|error:|ENCODER|XCTSkip|skipped" | sed -E 's/^.*Test Case /Test Case /' | tail -80
       - name: Build as a real Xcode app (App Intents metadata for Siri)
         run: |
+          set -o pipefail
           brew install xcodegen
           cd macOS && xcodegen generate --spec project.yml
           xcodebuild -project SpatialMac.xcodeproj -scheme SpatialMacHost -configuration Release \
