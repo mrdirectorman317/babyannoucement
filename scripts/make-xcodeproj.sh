@@ -10,7 +10,7 @@ if ! command -v xcodegen >/dev/null; then
 fi
 cd "$ROOT/macOS"
 xcodegen generate --spec project.yml
-xcodebuild -project SpatialMac.xcodeproj -scheme SpatialMacHost -configuration Release \
+xcodebuild -project SpatialMac.xcodeproj -scheme SpatialMacApp -configuration Release \
   -derivedDataPath "$ROOT/Build/DerivedData" CODE_SIGN_IDENTITY=- build
 APP="$ROOT/Build/DerivedData/Build/Products/Release/SpatialMacHost.app"
 mkdir -p "$ROOT/Build"; rm -rf "$ROOT/Build/SpatialMac.app"; cp -R "$APP" "$ROOT/Build/SpatialMac.app"

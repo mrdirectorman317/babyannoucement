@@ -67,10 +67,11 @@ jobs:
           set -o pipefail
           brew install xcodegen
           cd macOS && xcodegen generate --spec project.yml
-          xcodebuild -project SpatialMac.xcodeproj -scheme SpatialMacHost -configuration Release \
+          xcodebuild -project SpatialMac.xcodeproj -scheme SpatialMacApp -configuration Release \
             -derivedDataPath ../Build/DerivedData CODE_SIGN_IDENTITY=- build > ../xcb.log 2>&1 || { grep -E 'error:' ../xcb.log | sed -E 's#^.*/Sources/#Sources/#' | sort -u | head -60; exit 1; }
           tail -2 ../xcb.log
           APP=../Build/DerivedData/Build/Products/Release/SpatialMacHost.app
+          echo "---- products ----"; find ../Build/DerivedData/Build/Products -maxdepth 3 | head -20
           echo "---- app bundle ----"; find "$APP" -maxdepth 3 | sed "s#^$APP#APP#" | head -30
           echo "---- appintents lines in build log ----"; grep -i "appintents" ../xcb.log | cut -c1-220 | head -12
           test -d "$APP/Contents/Resources/Metadata.appintents" || { echo "MISSING Metadata.appintents: Siri/Shortcuts would not find the intents"; exit 1; }

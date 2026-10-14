@@ -10,7 +10,8 @@ packages:
   SpatialMac:
     path: .
 targets:
-  SpatialMacHost:
+  # Named differently from the package's own `SpatialMacHost` executable so the two schemes cannot collide.
+  SpatialMacApp:
     type: application
     platform: macOS
     sources:

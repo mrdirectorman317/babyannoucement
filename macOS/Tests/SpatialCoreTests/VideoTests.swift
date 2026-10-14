@@ -73,3 +73,28 @@ final class VideoTests: XCTestCase {
         XCTAssertEqual(AdaptiveBitrate.suggested(width: 320, height: 200, fps: 5), 3_000_000)
     }
 }
+
+/// Unity's JsonUtility writes EVERY field of Message with its default (0, "", false). The host must read those
+/// defaults as "no preference", not as real values.
+final class UnityEnvelopeTests: XCTestCase {
+    private func decode(_ json: String) throws -> Message { try JSONDecoder().decode(Message.self, from: Data(json.utf8)) }
+    private let defaults = #""token":"","clientID":"","role":"","sourceID":"","action":"","text":"","appID":"","error":"","requestID":"","title":"","body":"","appName":"","category":"","notificationID":"","confirmID":"","command":"","arg":"","codec":"","kbps":0,"t0":0,"t1":0,"streamID":0,"generation":0,"fps":0,"maxWidth":0,"button":0,"keyCode":0,"modifiers":0,"u":0,"v":0,"dx":0,"dy":0,"value":0,"controlEnabled":false,"sharingEnabled":false,"speechEnabled":false,"assistantEnabled":false,"messagesEnabled":false,"replyEnabled":false,"replyable":false"#
+    func testSubscribeWithVideoPreference() throws {
+        let m = try decode(#"{"type":"subscribe",\#(defaults.replacingOccurrences(of: #""codec":"""#, with: #""codec":"h264""#).replacingOccurrences(of: #""streamID":0"#, with: #""streamID":5"#).replacingOccurrences(of: #""fps":0"#, with: #""fps":60"#).replacingOccurrences(of: #""maxWidth":0"#, with: #""maxWidth":1920"#)),"sources":[]}"#)
+        XCTAssertEqual(m.type, "subscribe"); XCTAssertEqual(m.streamID, 5); XCTAssertEqual(m.fps, 60)
+        XCTAssertEqual(m.codec.flatMap(VideoCodec.init(name:)), .h264)
+        XCTAssertEqual(m.kbps, 0, "0 means 'host default' and must not be clamped to a 1 Mbps stream")
+    }
+    func testEmptyCodecMeansJPEG() throws {
+        let m = try decode(#"{"type":"subscribe",\#(defaults)}"#)
+        XCTAssertNil(m.codec.flatMap(VideoCodec.init(name:)))
+    }
+    func testPingCarriesClientClock() throws {
+        let m = try decode(#"{"type":"ping","requestID":"abc","t0":1234567890123.5,"t1":0}"#)
+        XCTAssertEqual(m.t0, 1234567890123.5)
+    }
+    func testKeyframeRequest() throws {
+        let m = try decode(#"{"type":"request_keyframe",\#(defaults.replacingOccurrences(of: #""streamID":0"#, with: #""streamID":3"#))}"#)
+        XCTAssertEqual(m.type, "request_keyframe"); XCTAssertEqual(m.streamID, 3)
+    }
+}
